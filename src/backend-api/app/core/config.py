@@ -1,0 +1,78 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+SRC_DIR = Path(__file__).resolve().parents[3]
+ENV_FILE = SRC_DIR / ".env"
+
+
+class Settings(BaseSettings):
+    app_name: str = "business-research-platform"
+    app_env: str = "development"
+    api_port: int = 8000
+    cors_allowed_origins_raw: str = (
+        "http://127.0.0.1:5173,"
+        "http://localhost:5173,"
+        "http://127.0.0.1:5174,"
+        "http://localhost:5174"
+    )
+
+    postgres_db: str = "research_platform"
+    postgres_user: str = "postgres"
+    postgres_password: str = "postgres"
+    postgres_port: int = 5432
+    postgres_host: str = "127.0.0.1"
+
+    jwt_secret: str = "change-this-secret-in-real-env"
+    jwt_expire_minutes: int = 120
+    jwt_algorithm: str = "HS256"
+
+    default_model_provider: str = "openai"
+    default_model_name: str = "gpt-4.1-mini"
+    default_admin_username: str = "admin"
+    default_admin_email: str = "admin@example.com"
+    default_admin_password: str = "change-this-admin-password"
+    default_admin_display_name: str = "系统管理员"
+
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model_name: str = "gpt-4.1-mini"
+    openai_timeout_seconds: int = 90
+    stock_lookback_days: int = 30
+
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE,
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    @property
+    def is_debug(self) -> bool:
+        return self.app_env.lower() == "development"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def database_url(self) -> str:
+        return (
+            "postgresql+psycopg://"
+            f"{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins_raw.split(",")
+            if origin.strip()
+        ]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
