@@ -88,13 +88,14 @@ export function LoginPage() {
   return (
     <div className="public-page">
       <section className="auth-card">
-        <p className="eyebrow">管理员登录</p>
-        <h1>管理端已经接上真实管理员认证校验</h1>
-        <p>
+        {/* <p className="eyebrow">管理员登录</p> */}
+        {/* <h1>管理端已经接上真实管理员认证校验</h1> */}
+        <h1>管理员登录</h1>
+        {/* <p>
           当前页面会先调用 <code>/auth/login</code> 获取 token，再通过
           <code>/auth/admin-check</code> 校验管理员权限。通过后会写入本地会话，
           刷新时再由 <code>/auth/me</code> 恢复当前管理员信息。
-        </p>
+        </p> */}
 
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="field">
@@ -118,9 +119,9 @@ export function LoginPage() {
             />
           </label>
 
-          <p className="field-hint">
+          {/* <p className="field-hint">
             请使用 `src/.env` 与初始化脚本中创建的默认管理员账号登录。
-          </p>
+          </p> */}
 
           {errorMessage ? (
             <p className="form-message form-message-error">{errorMessage}</p>
@@ -142,14 +143,14 @@ export function LoginPage() {
       </section>
 
       <section className="section-grid">
-        <article className="section-card">
+        {/* <article className="section-card">
           <h2>当前已接通的内容</h2>
           <ul className="placeholder-list">
             <li>真实 `POST /auth/login` 管理员登录</li>
             <li>真实 `GET /auth/admin-check` 管理员权限校验</li>
             <li>刷新后通过 `GET /auth/me` 恢复当前管理员信息</li>
           </ul>
-        </article>
+        </article> */}
 
         <article className="section-card">
           <h2>当前本地状态</h2>

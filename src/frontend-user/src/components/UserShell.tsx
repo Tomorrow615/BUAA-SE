@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
-import { API_BASE_URL, USER_STAGE_LABEL } from "../lib/config";
+import { API_BASE_URL/*, USER_STAGE_LABEL*/ } from "../lib/config";
 
 const navigationItems = [
   {
@@ -29,8 +29,8 @@ export function UserShell() {
       <aside className="shell-sidebar">
         <div className="shell-brand">
           <p className="eyebrow">商业对象智能深度调研分析平台</p>
-          <h1>用户端骨架</h1>
-          <p>{USER_STAGE_LABEL}</p>
+          <h1>用户端</h1>
+          {/* <p>{USER_STAGE_LABEL}</p> */}
         </div>
 
         <nav className="shell-nav" aria-label="用户端导航">
@@ -79,8 +79,8 @@ export function UserShell() {
       <main className="shell-main">
         <header className="shell-toolbar">
           <div>
-            <p className="eyebrow">当前阶段</p>
-            <h2>用户端主链路、页面骨架和基础体验收口已经完成</h2>
+            {/* <p className="eyebrow">当前阶段</p>
+            <h2>用户端主链路、页面骨架和基础体验收口已经完成</h2> */}
             <div className="shell-toolbar-actions">
               <Link className="button-ghost" to="/">
                 返回首页
@@ -103,11 +103,11 @@ export function UserShell() {
           </div>
         </header>
 
-        <section className="info-banner">
+        {/* <section className="info-banner">
           <strong>第 7 步已完成：</strong>
           用户端已经完成真实认证、调研任务创建、任务列表、任务详情、状态轮询和统一体验收口。
           当前可以进入第 8 步，继续补 AI、真实数据源和展示增强能力。
-        </section>
+        </section> */}
 
         <Outlet />
       </main>

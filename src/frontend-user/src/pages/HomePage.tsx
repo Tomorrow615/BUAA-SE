@@ -8,12 +8,13 @@ export function HomePage() {
   return (
     <div className="public-page">
       <section className="hero-card">
-        <p className="eyebrow">第 7 步 · 用户端页面骨架已完成</p>
-        <h1>用户端已经完成主链路接通与阶段验收</h1>
-        <p>
+        {/* <p className="eyebrow">第 7 步 · 用户端页面骨架已完成</p> */}
+        {/* <h1>用户端已经完成主链路接通与阶段验收</h1> */}
+        {/* <p>
           当前用户端已经完成真实登录注册、任务创建、任务列表、任务详情、状态轮询和体验收口。
           这一阶段的目标是把可演示、可联调、可继续扩展的页面骨架正式搭稳。
-        </p>
+        </p> */}
+        <h1>商业对象智能深度调研分析平台——用户端</h1>
 
         <div className="button-row">
           {status === "authenticated" ? (
@@ -40,7 +41,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="section-grid">
+      {/* <section className="section-grid">
         <article className="section-card">
           <h2>这一步已经完成什么</h2>
           <ul className="placeholder-list">
@@ -59,7 +60,7 @@ export function HomePage() {
             <li>再往后衔接更完整的分析、报告和治理能力</li>
           </ul>
         </article>
-      </section>
+      </section> */}
     </div>
   );
 }

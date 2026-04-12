@@ -9,12 +9,13 @@ export function ProfilePage() {
   return (
     <div className="page-section">
       <header className="page-title">
-        <p className="eyebrow">个人中心</p>
+        {/* <p className="eyebrow">个人中心</p>
         <h1>当前用户信息已经可以通过真实认证链路恢复</h1>
         <p>
           当前页已经承接真实登录后的用户资料展示，后续再补资料维护、
           历史报告、收藏和常用模型功能。
-        </p>
+        </p> */}
+        <h1>当前用户信息</h1>
         <div className="page-meta-line">
           <p className="field-hint">
             当前会话创建于：{formatDateTime(session?.createdAt || null)}
@@ -54,14 +55,14 @@ export function ProfilePage() {
           </dl>
         </article>
 
-        <article className="section-card">
+        {/* <article className="section-card">
           <h2>后续继续承接的内容</h2>
           <ul className="placeholder-list">
             <li>当前用户资料维护</li>
             <li>历史调研任务与历史报告入口</li>
             <li>收藏、偏好设置和常用模型</li>
           </ul>
-        </article>
+        </article> */}
       </section>
     </div>
   );

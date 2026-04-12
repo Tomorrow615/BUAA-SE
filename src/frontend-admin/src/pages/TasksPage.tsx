@@ -153,10 +153,10 @@ export function TasksPage() {
       <header className="page-title">
         <p className="eyebrow">任务治理</p>
         <h1>后台任务治理页已经接入管理员可见的全局任务列表</h1>
-        <p>
+        {/* <p>
           当前页面通过管理员身份调用 <code>/research/tasks</code>，可查看全局任务的状态、阶段、
           模型和进度，用于后台排障和队列观察。
-        </p>
+        </p> */}
         <div className="page-meta-line">
           <p className="field-hint">
             最近刷新：{formatDateTime(lastUpdatedAt)}

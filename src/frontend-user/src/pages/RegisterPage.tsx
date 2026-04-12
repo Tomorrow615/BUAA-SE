@@ -82,12 +82,13 @@ export function RegisterPage() {
   return (
     <div className="public-page">
       <section className="auth-card">
-        <p className="eyebrow">用户注册</p>
+        {/* <p className="eyebrow">用户注册</p>
         <h1>用户端已经接上真实注册接口</h1>
         <p>
           当前页面会直接调用 <code>/auth/register</code>。注册成功后会立即保存
           token，并进入用户端工作台。
-        </p>
+        </p> */}
+        <h1>用户注册</h1>
 
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="field">

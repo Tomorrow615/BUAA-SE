@@ -117,10 +117,10 @@ export function ModelsPage() {
       <header className="page-title">
         <p className="eyebrow">模型配置</p>
         <h1>模型治理页已经接入真实模型列表查询</h1>
-        <p>
+        {/* <p>
           当前页面调用 <code>/admin/models</code>，可按关键字和是否启用过滤，
           方便管理员快速查看当前模型配置情况。
-        </p>
+        </p> */}
         <div className="page-meta-line">
           <p className="field-hint">
             最近刷新：{formatDateTime(lastUpdatedAt)}
