@@ -8,12 +8,10 @@ export function AdminHomePage() {
   return (
     <div className="public-page">
       <section className="hero-card">
-        <p className="eyebrow">第 7 步 · 管理端页面骨架已完成</p>
-        <h1>管理端已经完成主链路接通与阶段验收</h1>
-        <p>
+        <h1>商业对象智能深度调研分析平台——管理端</h1>
+        {/* <p>
           当前管理端已经完成真实管理员登录校验，以及概览、模型、用户、任务、日志等后台查询页面。
-          这一阶段的目标是把可联调、可演示、可继续扩展的后台页面骨架正式搭稳。
-        </p>
+        </p> */}
 
         <div className="button-row">
           <Link className="button-primary" to="/login">
@@ -27,7 +25,7 @@ export function AdminHomePage() {
         </div>
       </section>
 
-      <section className="section-grid">
+      {/* <section className="section-grid">
         <article className="section-card">
           <h2>这一步已经完成什么</h2>
           <ul className="placeholder-list">
@@ -46,7 +44,7 @@ export function AdminHomePage() {
             <li>再往后衔接更完整的 AI、报告和数据源能力</li>
           </ul>
         </article>
-      </section>
+      </section> */}
     </div>
   );
 }

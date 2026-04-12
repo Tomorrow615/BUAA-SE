@@ -152,12 +152,13 @@ export function WorkspacePage() {
   return (
     <div className="page-section">
       <header className="page-title">
-        <p className="eyebrow">调研工作台</p>
+        {/* <p className="eyebrow">调研工作台</p>
         <h1>股票调研最小闭环工作台</h1>
         <p>
           当前第 8 步先聚焦股票。提交后会进入真实的股票采集、AI 分析和报告生成链路，
           然后直接跳转到任务详情页查看材料、分析结论和引用式报告。
-        </p>
+        </p> */}
+        <h1>股票调研工作台</h1>
         <div className="page-meta-line">
           <p className="field-hint">
             最近模型同步：{formatDateTime(lastModelSyncAt)}

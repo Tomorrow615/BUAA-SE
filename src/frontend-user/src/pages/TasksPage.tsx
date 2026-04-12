@@ -153,12 +153,13 @@ export function TasksPage() {
   return (
     <div className="page-section">
       <header className="page-title">
-        <p className="eyebrow">任务中心</p>
+        {/* <p className="eyebrow">任务中心</p>
         <h1>用户端已经可以查看自己创建的真实调研任务列表</h1>
         <p>
           当前页面已经接入 <code>GET /research/tasks</code>，支持基础筛选、手动刷新
           和跳转详情页查看阶段日志与处理状态。
-        </p>
+        </p> */}
+        <h1>查看调研任务列表</h1>
         <div className="page-meta-line">
           <p className="field-hint">
             最近刷新：{formatDateTime(lastUpdatedAt)}

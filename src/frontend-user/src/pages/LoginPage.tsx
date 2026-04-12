@@ -81,12 +81,13 @@ export function LoginPage() {
   return (
     <div className="public-page">
       <section className="auth-card">
-        <p className="eyebrow">用户登录</p>
-        <h1>用户端已经接上真实登录接口</h1>
-        <p>
+        {/* <p className="eyebrow">用户登录</p>
+        <h1>用户端已经接上真实登录接口</h1> */}
+        <h1>用户登录</h1>
+        {/* <p>
           当前页面会直接调用 <code>/auth/login</code>，拿到 token 后写入本地会话，
           并在刷新时通过 <code>/auth/me</code> 恢复当前用户信息。
-        </p>
+        </p> */}
 
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="field">
@@ -134,14 +135,14 @@ export function LoginPage() {
       </section>
 
       <section className="section-grid">
-        <article className="section-card">
+        {/* <article className="section-card">
           <h2>当前已接通的内容</h2>
           <ul className="placeholder-list">
             <li>提交登录表单后调用真实 `/auth/login`</li>
             <li>token 会写入本地存储并进入受保护路由</li>
             <li>刷新后会通过 `/auth/me` 恢复用户信息</li>
           </ul>
-        </article>
+        </article> */}
 
         <article className="section-card">
           <h2>当前本地状态</h2>

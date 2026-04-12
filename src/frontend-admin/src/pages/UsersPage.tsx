@@ -116,10 +116,10 @@ export function UsersPage() {
       <header className="page-title">
         <p className="eyebrow">用户管理</p>
         <h1>用户治理页已经接入真实用户列表和状态查询</h1>
-        <p>
+        {/* <p>
           当前页面调用 <code>/admin/users</code>，可按关键字和账号状态过滤，
           用于管理员查看用户规模、角色分布和任务活跃度。
-        </p>
+        </p> */}
         <div className="page-meta-line">
           <p className="field-hint">
             最近刷新：{formatDateTime(lastUpdatedAt)}

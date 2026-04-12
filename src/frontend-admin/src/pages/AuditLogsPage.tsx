@@ -112,10 +112,10 @@ export function AuditLogsPage() {
       <header className="page-title">
         <p className="eyebrow">审计日志</p>
         <h1>日志检索页已经接入真实审计日志查询</h1>
-        <p>
+        {/* <p>
           当前页面调用 <code>/admin/audit-logs</code>，支持关键字与动作类型过滤，
           用于后台追踪任务创建和后续治理动作。
-        </p>
+        </p> */}
         <div className="page-meta-line">
           <p className="field-hint">
             最近刷新：{formatDateTime(lastUpdatedAt)}
