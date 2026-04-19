@@ -6,6 +6,54 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
+## 推荐启动方式
+
+如果你本地已经完成过一次依赖安装和 Python 虚拟环境准备，当前最方便的开发启动方式是在 `src/` 目录直接使用一键脚本：
+
+```powershell
+cd src
+.\dev-start.cmd
+```
+
+默认会启动：
+
+- `backend-api`
+- `frontend-user`
+- `backend-worker`
+- `docker compose` 中的 PostgreSQL 和 Redis
+
+常用参数：
+
+```powershell
+.\dev-start.cmd -InitDb
+.\dev-start.cmd -WithAdmin
+.\dev-start.cmd -NoWorker
+```
+
+配套脚本：
+
+```powershell
+.\dev-status.cmd
+.\dev-stop.cmd
+```
+
+说明：
+
+- `.\dev-start.cmd -InitDb` 会在启动前执行数据库迁移和初始数据写入
+- `-WithAdmin` 会额外启动管理端
+- `-NoWorker` 适合只调前端界面或接口联调时使用
+- 一键脚本是开发便捷入口，但仍然依赖你已经准备好 `backend-api/.venv`、`backend-worker/.venv` 和前端 `node_modules`
+
+## 手动启动方式
+
+如果你需要逐个排查服务、单独调试某一层，原来的手动启动方式仍然可用，推荐顺序如下：
+
+1. 在 `src/` 目录执行 `docker compose up -d`
+2. 启动 `backend-api`
+3. 启动 `backend-worker`
+4. 启动 `frontend-user`
+5. 如有需要再启动 `frontend-admin`
+
 一个面向 **公司、股票、商品** 三类商业对象的智能深度调研分析平台。  
 项目采用 B/S 架构，围绕“发起调研 -> 任务执行 -> 过程跟踪 -> 后台治理”构建统一链路，支持用户端调研工作流、管理端治理工作流以及后台 Worker 执行链路。
 

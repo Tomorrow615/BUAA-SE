@@ -1,0 +1,9 @@
+# Python runtime caches
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.pyd
+
+# Common local system files
+.DS_Store
+Thumbs.db
