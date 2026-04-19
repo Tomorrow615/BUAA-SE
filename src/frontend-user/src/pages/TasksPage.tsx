@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { StatePanel } from "../components/StatePanel";
@@ -19,9 +19,9 @@ import {
   type TaskStatus,
 } from "../lib/research";
 
-function truncateText(value: string | null, maxLength = 110): string {
+function truncateText(value: string | null, maxLength = 120): string {
   if (!value) {
-    return "暂无结果摘要";
+    return "该任务已创建，等待更多结果摘要沉淀。";
   }
 
   if (value.length <= maxLength) {
@@ -67,9 +67,7 @@ export function TasksPage() {
       setLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "任务列表加载失败，请稍后重试。",
+        error instanceof Error ? error.message : "任务列表加载失败，请稍后重试。",
       );
     } finally {
       setIsLoading(false);
@@ -112,9 +110,7 @@ export function TasksPage() {
         }
 
         setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "任务列表加载失败，请稍后重试。",
+          error instanceof Error ? error.message : "任务列表加载失败，请稍后重试。",
         );
       } finally {
         if (!cancelled) {
@@ -150,32 +146,67 @@ export function TasksPage() {
     await loadTasks();
   }
 
+  const dashboardMetrics = useMemo(() => {
+    const completed = tasks.filter((task) => task.status === "COMPLETED").length;
+    const running = tasks.filter((task) =>
+      ["QUEUED", "COLLECTING", "PROCESSING", "ANALYZING", "REPORTING"].includes(
+        task.status,
+      ),
+    ).length;
+    const failed = tasks.filter((task) => task.status === "FAILED").length;
+    const stockTasks = tasks.filter((task) => task.object_type === "STOCK").length;
+
+    return [
+      { label: "当前列表任务数", value: String(total) },
+      { label: "进行中", value: String(running) },
+      { label: "已完成", value: String(completed) },
+      { label: "股票任务", value: String(stockTasks) },
+      { label: "失败任务", value: String(failed) },
+    ];
+  }, [tasks, total]);
+
   return (
     <div className="page-section">
-      <header className="page-title">
-        {/* <p className="eyebrow">任务中心</p>
-        <h1>用户端已经可以查看自己创建的真实调研任务列表</h1>
-        <p>
-          当前页面已经接入 <code>GET /research/tasks</code>，支持基础筛选、手动刷新
-          和跳转详情页查看阶段日志与处理状态。
-        </p> */}
-        <h1>查看调研任务列表</h1>
-        <div className="page-meta-line">
-          <p className="field-hint">
-            最近刷新：{formatDateTime(lastUpdatedAt)}
+      <header className="page-title tasks-page-header">
+        <div>
+          <p className="eyebrow">任务中心</p>
+          <h1>研究任务中心</h1>
+          <p>
+            统一查看任务进度、报告结果、未来导出能力与资产化入口。当前真实任务以股票研究为主，其他对象入口已纳入筛选与结构展示。
           </p>
-          <div className="button-row button-row-tight">
-            <Link className="button-secondary" to="/workspace">
-              发起新调研
-            </Link>
-            <Link className="button-ghost" to="/profile">
-              打开个人中心
-            </Link>
-          </div>
+        </div>
+
+        <div className="button-row button-row-tight">
+          <Link className="button-primary" to="/workspace">
+            发起新研究
+          </Link>
+          <button type="button" className="button-secondary" disabled>
+            批量导出
+          </button>
+          <button type="button" className="button-ghost" disabled>
+            订阅提醒
+          </button>
         </div>
       </header>
 
-      <section className="section-card">
+      <section className="overview-metric-grid">
+        {dashboardMetrics.map((item) => (
+          <article key={item.label} className="overview-metric-card">
+            <strong>{item.value}</strong>
+            <span>{item.label}</span>
+          </article>
+        ))}
+      </section>
+
+      <section className="section-card filter-card">
+        <div className="workspace-card-head">
+          <div>
+            <h2>筛选与查找</h2>
+            <p>可按对象类型、状态、模型和关键词定位当前任务。</p>
+          </div>
+          <p className="field-hint">最近刷新：{formatDateTime(lastUpdatedAt)}</p>
+        </div>
+
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="field-row field-row-four">
             <label className="field">
@@ -186,7 +217,7 @@ export function TasksPage() {
                   setObjectType(event.target.value as ObjectType | "")
                 }
               >
-                <option value="">全部</option>
+                <option value="">全部对象</option>
                 {OBJECT_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -203,7 +234,7 @@ export function TasksPage() {
                   setStatusFilter(event.target.value as TaskStatus | "")
                 }
               >
-                <option value="">全部</option>
+                <option value="">全部状态</option>
                 {TASK_STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -213,7 +244,7 @@ export function TasksPage() {
             </label>
 
             <label className="field">
-              <span>模型</span>
+              <span>研究模型</span>
               <select
                 value={selectedModelId}
                 onChange={(event) => setSelectedModelId(event.target.value)}
@@ -232,7 +263,7 @@ export function TasksPage() {
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="对象名称或任务标题"
+                placeholder="研究对象或任务标题"
               />
             </label>
           </div>
@@ -245,6 +276,7 @@ export function TasksPage() {
             <p className="field-hint">
               当前共返回 <strong>{total}</strong> 条任务记录。
             </p>
+
             <div className="button-row button-row-tight">
               <button
                 type="submit"
@@ -268,7 +300,7 @@ export function TasksPage() {
                 }}
                 disabled={isLoading}
               >
-                刷新
+                刷新列表
               </button>
               <button
                 type="button"
@@ -280,9 +312,6 @@ export function TasksPage() {
               >
                 清空筛选
               </button>
-              <Link className="button-secondary" to="/workspace">
-                发起新调研
-              </Link>
             </div>
           </div>
         </form>
@@ -300,7 +329,7 @@ export function TasksPage() {
         <StatePanel
           eyebrow="任务状态"
           title="当前还没有匹配的任务"
-          description="你可以先去调研工作台创建一条任务，或者调整筛选条件后再刷新。"
+          description="你可以先去工作台发起一条研究任务，或者调整筛选条件后重新查看。"
           tone={errorMessage ? "danger" : "warning"}
           actions={
             <>
@@ -323,7 +352,7 @@ export function TasksPage() {
 
       <section className="task-list">
         {tasks.map((task) => (
-          <article key={task.id} className="task-card">
+          <article key={task.id} className="task-card task-card-rich">
             <div className="task-card-header">
               <div>
                 <p className="eyebrow">任务编号 {task.task_no}</p>
@@ -340,7 +369,7 @@ export function TasksPage() {
 
             <dl className="meta-grid">
               <div>
-                <dt>对象类型</dt>
+                <dt>研究对象</dt>
                 <dd>{formatObjectType(task.object_type)}</dd>
               </div>
               <div>
@@ -352,7 +381,7 @@ export function TasksPage() {
                 <dd>{formatTaskStatus(task.current_stage)}</dd>
               </div>
               <div>
-                <dt>模型</dt>
+                <dt>研究模型</dt>
                 <dd>{task.selected_model?.display_name || "默认模型"}</dd>
               </div>
               <div>
@@ -371,13 +400,23 @@ export function TasksPage() {
               />
             </div>
 
-            <div className="button-row button-row-tight">
-              <Link className="button-primary" to={`/tasks/${task.id}`}>
-                查看详情
-              </Link>
-              <Link className="button-ghost" to="/workspace">
-                再发起一条
-              </Link>
+            <div className="task-card-footer">
+              <div className="task-card-actions">
+                <Link className="button-primary" to={`/tasks/${task.id}`}>
+                  查看详情
+                </Link>
+                <Link className="button-secondary" to="/workspace">
+                  再发起一条
+                </Link>
+                <button type="button" className="button-ghost" disabled>
+                  收藏任务
+                </button>
+              </div>
+
+              <div className="task-card-assets">
+                <span>报告资产</span>
+                <strong>Markdown 已展示</strong>
+              </div>
             </div>
           </article>
         ))}

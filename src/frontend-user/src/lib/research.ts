@@ -300,6 +300,181 @@ export function formatTaskStatus(value: string): string {
   }
 }
 
+export function formatSourceType(value: string): string {
+  switch (value) {
+    case "API":
+      return "数据接口";
+    case "WEB":
+      return "网页资料";
+    case "FILE":
+      return "文件资料";
+    case "MANUAL":
+      return "人工整理";
+    default:
+      return value;
+  }
+}
+
+export function formatAuthorityLevel(value: string): string {
+  switch (value) {
+    case "HIGH":
+      return "高可信";
+    case "MEDIUM":
+      return "中可信";
+    case "LOW":
+      return "低可信";
+    default:
+      return value;
+  }
+}
+
+export function formatSourceStrategy(value: string | null): string {
+  switch (value) {
+    case "DEFAULT":
+      return "智能平衡";
+    case "OFFICIAL_FIRST":
+      return "官方优先";
+    case "NEWS_HEAVY":
+      return "新闻增强";
+    case "":
+    case null:
+      return "未设置";
+    default:
+      return value;
+  }
+}
+
+export function formatReportType(value: string): string {
+  switch (value) {
+    case "BRIEF":
+      return "简版";
+    case "FULL":
+      return "详版";
+    default:
+      return value;
+  }
+}
+
+export function formatReportStatus(value: string): string {
+  switch (value) {
+    case "DRAFT":
+      return "草稿中";
+    case "READY":
+      return "已生成";
+    case "FAILED":
+      return "生成失败";
+    default:
+      return value;
+  }
+}
+
+export function formatOperatorType(value: string): string {
+  switch (value) {
+    case "SYSTEM":
+      return "系统";
+    case "USER":
+      return "用户";
+    case "ADMIN":
+      return "管理员";
+    case "WORKER":
+      return "执行引擎";
+    default:
+      return value;
+  }
+}
+
+export function formatResearchDepth(value: string): string {
+  switch (value) {
+    case "QUICK":
+      return "快速";
+    case "STANDARD":
+      return "标准";
+    case "DEEP":
+      return "深入";
+    default:
+      return value;
+  }
+}
+
+export function formatTaskParamLabel(key: string): string {
+  switch (key) {
+    case "research_depth":
+      return "调研深度";
+    case "report_type":
+      return "报告形式";
+    case "target_domain":
+      return "研究领域";
+    case "original_object_query":
+      return "原始输入";
+    case "resolved_stock_name":
+      return "识别后的股票名称";
+    case "resolved_stock_symbol":
+      return "识别后的交易代码";
+    case "resolved_stock_code":
+      return "识别后的股票代码";
+    case "lookback_days":
+      return "观察窗口";
+    case "quote_page_url":
+      return "行情页面";
+    case "material_collection_mode":
+      return "材料采集模式";
+    case "material_collection_error":
+      return "采集失败原因";
+    default:
+      return key;
+  }
+}
+
+export function formatTaskParamValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) {
+    return "暂无";
+  }
+
+  if (key === "report_type" && typeof value === "string") {
+    return formatReportType(value);
+  }
+
+  if (key === "research_depth" && typeof value === "string") {
+    return formatResearchDepth(value);
+  }
+
+  if (key === "lookback_days" && typeof value === "number") {
+    return `${value} 天`;
+  }
+
+  if (key === "target_domain" && typeof value === "string") {
+    switch (value.toLowerCase()) {
+      case "stock":
+        return "股票";
+      case "company":
+        return "公司";
+      case "commodity":
+        return "商品";
+      default:
+        return value;
+    }
+  }
+
+  if (key === "material_collection_mode" && typeof value === "string") {
+    switch (value) {
+      case "GEMINI_GOOGLE_SEARCH":
+        return "Gemini 联网补充";
+      default:
+        return value;
+    }
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return JSON.stringify(value, null, 2);
+}
+
 export function formatDateTime(value: string | null): string {
   if (!value) {
     return "暂无";

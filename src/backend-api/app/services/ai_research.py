@@ -5,8 +5,16 @@ import json
 import logging
 import re
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+from app.services.gemini_api import (
+    GeminiGroundingSource,
+    build_google_search_tool,
+    build_text_content,
+    call_gemini_generate_content,
+    call_gemini_generate_content_raw,
+    extract_grounding_sources,
+    extract_text_from_response,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +34,7 @@ class AnalysisOutput:
     provider_code: str
     used_fallback: bool
     raw_response_text: str | None
+    grounded_sources: list[GeminiGroundingSource]
 
 
 def mask_secret(secret: str | None) -> str | None:
@@ -45,33 +54,69 @@ def generate_stock_analysis(
     research_goal: str | None,
     materials: list[Any],
     lookback_days: int,
+    allow_google_search: bool = False,
 ) -> AnalysisOutput:
-    resolved_model_name = model_name or settings.openai_model_name
+    resolved_model_name = model_name or settings.gemini_model_name
     raw_response_text: str | None = None
 
-    if settings.openai_api_key:
+    if settings.gemini_api_key:
         try:
-            prompt = build_stock_prompt(
-                stock_name=stock_name,
-                stock_symbol=stock_symbol,
-                research_goal=research_goal,
-                materials=materials,
-                lookback_days=lookback_days,
-            )
-            raw_response_text = call_openai_chat_completion(
-                settings=settings,
-                model_name=resolved_model_name,
-                prompt=prompt,
-            )
+            grounded_sources: list[GeminiGroundingSource] = []
+            if allow_google_search and settings.gemini_google_search_enabled:
+                prompt = build_stock_web_prompt(
+                    stock_name=stock_name,
+                    stock_symbol=stock_symbol,
+                    research_goal=research_goal,
+                    lookback_days=lookback_days,
+                )
+                response_payload = call_gemini_generate_content_raw(
+                    settings=settings,
+                    model_name=resolved_model_name,
+                    contents=[build_text_content("user", prompt)],
+                    system_instruction=(
+                        "You are a financial research assistant. "
+                        "Use Google Search grounding when needed. "
+                        "Rely on public, recent, and authoritative sources where possible. "
+                        "Return a single JSON object and nothing else."
+                    ),
+                    temperature=0.2,
+                    max_output_tokens=4096,
+                    tools=[build_google_search_tool()],
+                )
+                raw_response_text = extract_text_from_response(response_payload)
+                grounded_sources = extract_grounding_sources(response_payload)
+            else:
+                prompt = build_stock_prompt(
+                    stock_name=stock_name,
+                    stock_symbol=stock_symbol,
+                    research_goal=research_goal,
+                    materials=materials,
+                    lookback_days=lookback_days,
+                )
+                raw_response_text = call_gemini_generate_content(
+                    settings=settings,
+                    model_name=resolved_model_name,
+                    contents=[build_text_content("user", prompt)],
+                    system_instruction=(
+                        "You are a financial research assistant. "
+                        "You must only use the provided materials. "
+                        "Return a single JSON object and nothing else."
+                    ),
+                    temperature=0.2,
+                    max_output_tokens=4096,
+                    response_mime_type="application/json",
+                )
+
             payload = parse_json_payload(raw_response_text)
             return build_analysis_output(
                 payload=payload,
                 model_name=resolved_model_name,
-                provider_code="openai",
+                provider_code="gemini",
                 raw_response_text=raw_response_text,
+                grounded_sources=grounded_sources,
             )
         except Exception as error:  # pragma: no cover - network path
-            logger.warning("OpenAI analysis failed, using fallback summary: %s", error)
+            logger.warning("Gemini analysis failed, using fallback summary: %s", error)
 
     return build_fallback_analysis(
         stock_name=stock_name,
@@ -81,67 +126,6 @@ def generate_stock_analysis(
         model_name=resolved_model_name,
         raw_response_text=raw_response_text,
     )
-
-
-def call_openai_chat_completion(settings: Any, *, model_name: str, prompt: str) -> str:
-    endpoint = f"{settings.openai_base_url.rstrip('/')}/chat/completions"
-    payload = {
-        "model": model_name,
-        "temperature": 0.2,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a financial research assistant. "
-                    "You must only use the provided materials. "
-                    "Return a single JSON object and nothing else."
-                ),
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-    }
-
-    request = Request(
-        endpoint,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        },
-        data=json.dumps(payload).encode("utf-8"),
-    )
-
-    try:
-        with urlopen(request, timeout=settings.openai_timeout_seconds) as response:
-            response_payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as error:  # pragma: no cover - network path
-        error_body = error.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(
-            f"OpenAI request failed with status {error.code}: {error_body}"
-        ) from error
-    except URLError as error:  # pragma: no cover - network path
-        raise RuntimeError(f"OpenAI request failed: {error.reason}") from error
-
-    choices = response_payload.get("choices") or []
-    if not choices:
-        raise RuntimeError("OpenAI response did not include any choices.")
-
-    message = choices[0].get("message") or {}
-    content = message.get("content")
-    if isinstance(content, list):
-        text_parts = []
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
-                text_parts.append(str(item.get("text", "")))
-        content = "\n".join(part for part in text_parts if part)
-
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("OpenAI response content was empty.")
-
-    return content.strip()
 
 
 def build_stock_prompt(
@@ -211,6 +195,38 @@ def build_stock_prompt(
 """.strip()
 
 
+def build_stock_web_prompt(
+    *,
+    stock_name: str,
+    stock_symbol: str,
+    research_goal: str | None,
+    lookback_days: int,
+) -> str:
+    research_goal_text = research_goal.strip() if research_goal and research_goal.strip() else "未额外指定研究目标"
+
+    return f"""
+请围绕以下股票生成结构化分析。你可以使用 Google Search grounding 检索公开资料，但不得编造来源。
+
+目标股票：{stock_name} ({stock_symbol})
+观察区间：近 {lookback_days} 天
+用户研究目标：{research_goal_text}
+
+输出要求：
+1. 只输出一个 JSON 对象，不要输出 Markdown 代码块，不要补充说明文字。
+2. JSON 必须包含以下字段：
+{{
+  "summary": "字符串",
+  "key_findings": ["字符串"],
+  "risks": ["字符串"],
+  "opportunities": ["字符串"],
+  "conclusion": "字符串"
+}}
+3. 允许使用联网检索得到的公开资料，但不能虚构具体来源或精确数据。
+4. 对于时间敏感信息，要尽量明确写出“截至目前”“近期”“最近交易日”等表述。
+ 5. 结论保持谨慎，不构成投资建议。
+""".strip()
+
+
 def parse_json_payload(raw_text: str) -> dict[str, Any]:
     cleaned = raw_text.strip()
     if cleaned.startswith("```"):
@@ -235,19 +251,23 @@ def build_analysis_output(
     model_name: str,
     provider_code: str,
     raw_response_text: str | None,
+    grounded_sources: list[GeminiGroundingSource] | None = None,
 ) -> AnalysisOutput:
     key_findings = coerce_string_list(payload.get("key_findings"))
     risks = coerce_string_list(payload.get("risks"))
     opportunities = coerce_string_list(payload.get("opportunities"))
+    grounded_sources = grounded_sources or []
 
     report_markdown = clean_text(payload.get("report_markdown"))
     if not report_markdown:
+        reference_lines = build_reference_lines(grounded_sources)
         report_markdown = build_markdown_from_payload(
             summary=clean_text(payload.get("summary"), fallback="信息不足。"),
             key_findings=key_findings,
             risks=risks,
             opportunities=opportunities,
             conclusion=clean_text(payload.get("conclusion"), fallback="信息不足。"),
+            reference_lines=reference_lines,
         )
 
     return AnalysisOutput(
@@ -261,6 +281,7 @@ def build_analysis_output(
         provider_code=provider_code,
         used_fallback=False,
         raw_response_text=raw_response_text,
+        grounded_sources=grounded_sources,
     )
 
 
@@ -320,9 +341,10 @@ def build_fallback_analysis(
         conclusion=conclusion,
         report_markdown=report_markdown,
         model_name=model_name,
-        provider_code="openai",
+        provider_code="gemini",
         used_fallback=True,
         raw_response_text=raw_response_text,
+        grounded_sources=[],
     )
 
 
@@ -333,6 +355,7 @@ def build_markdown_from_payload(
     risks: list[str],
     opportunities: list[str],
     conclusion: str,
+    reference_lines: list[str] | None = None,
 ) -> str:
     def render_lines(items: list[str]) -> str:
         if not items:
@@ -354,12 +377,28 @@ def build_markdown_from_payload(
             conclusion,
             "## 引用材料",
             render_lines(
-                [
+                reference_lines
+                or [
                     "报告正文中的 [SRC_xxx] 对应下方材料区中的来源编号。",
                 ]
             ),
         ]
     )
+
+
+def build_reference_lines(
+    grounded_sources: list[GeminiGroundingSource],
+) -> list[str]:
+    if not grounded_sources:
+        return ["报告正文中的引用请结合材料区查看。"]
+
+    lines: list[str] = []
+    for item in grounded_sources:
+        if item.uri:
+            lines.append(f"[{item.source_id}] {item.title} - {item.uri}")
+        else:
+            lines.append(f"[{item.source_id}] {item.title}")
+    return lines
 
 
 def strip_code_fence(value: str) -> str:

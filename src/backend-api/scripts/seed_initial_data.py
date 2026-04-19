@@ -17,6 +17,26 @@ from app.models.enums import AuthorityLevel, ObjectType, SceneType, SourceType
 from app.services.ai_research import mask_secret
 
 
+def disable_legacy_openai_configs() -> None:
+    legacy_models = db.scalars(
+        select(ModelConfig).where(
+            ModelConfig.provider_code.in_(["openai", "placeholder"])
+        )
+    ).all()
+    for model in legacy_models:
+        model.is_enabled = False
+        model.is_default = False
+        model.api_base_url = None
+        model.api_key_masked = None
+
+    legacy_sources = db.scalars(
+        select(SourceConfig).where(SourceConfig.source_code == "stock_openai_report")
+    ).all()
+    for source in legacy_sources:
+        source.is_enabled = False
+        source.base_url = None
+
+
 def upsert_role(role_code: str, role_name: str, description: str) -> None:
     existing = db.scalar(select(Role).where(Role.role_code == role_code))
     if existing is None:
@@ -36,42 +56,45 @@ def upsert_role(role_code: str, role_name: str, description: str) -> None:
 def upsert_model_config() -> None:
     db.execute(update(ModelConfig).values(is_default=False))
 
-    existing = db.scalar(
-        select(ModelConfig).where(
-            ModelConfig.provider_code == settings.default_model_provider,
-            ModelConfig.model_name == settings.default_model_name,
-        )
-    )
-
-    payload = {
-        "temperature": 0.2,
-        "max_output_tokens": 4096,
-        "note": "第8步股票调研链路默认模型配置",
-    }
-
-    if existing is None:
-        db.add(
-            ModelConfig(
-                provider_code=settings.default_model_provider,
-                model_name=settings.default_model_name,
-                display_name="OpenAI 股票调研模型",
-                api_base_url=settings.openai_base_url,
-                api_key_masked=mask_secret(settings.openai_api_key),
-                scene_type=SceneType.STOCK_RESEARCH.value,
-                is_enabled=True,
-                is_default=True,
-                config_json=payload,
+    for model_name in settings.gemini_available_models:
+        existing = db.scalar(
+            select(ModelConfig).where(
+                ModelConfig.provider_code == settings.default_model_provider,
+                ModelConfig.model_name == model_name,
             )
         )
-        return
 
-    existing.display_name = "OpenAI 股票调研模型"
-    existing.api_base_url = settings.openai_base_url
-    existing.api_key_masked = mask_secret(settings.openai_api_key)
-    existing.scene_type = SceneType.STOCK_RESEARCH.value
-    existing.is_enabled = True
-    existing.is_default = True
-    existing.config_json = payload
+        is_default = model_name == settings.default_model_name
+        payload = {
+            "temperature": 0.7,
+            "max_output_tokens": 2048,
+            "note": "Gemini 聊天与数据问答模型配置",
+        }
+        display_name = f"Gemini {model_name}"
+
+        if existing is None:
+            db.add(
+                ModelConfig(
+                    provider_code=settings.default_model_provider,
+                    model_name=model_name,
+                    display_name=display_name,
+                    api_base_url=settings.gemini_base_url,
+                    api_key_masked=mask_secret(settings.gemini_api_key),
+                    scene_type=SceneType.GENERAL.value,
+                    is_enabled=True,
+                    is_default=is_default,
+                    config_json=payload,
+                )
+            )
+            continue
+
+        existing.display_name = display_name
+        existing.api_base_url = settings.gemini_base_url
+        existing.api_key_masked = mask_secret(settings.gemini_api_key)
+        existing.scene_type = SceneType.GENERAL.value
+        existing.is_enabled = True
+        existing.is_default = is_default
+        existing.config_json = payload
 
 
 def upsert_admin_user() -> None:
@@ -114,7 +137,7 @@ def upsert_source_config(
     source_name: str,
     object_type: str,
     source_type: str,
-    base_url: str,
+    base_url: str | None,
     authority_level: str,
     priority_weight: float,
     strategy_json: dict,
@@ -150,6 +173,8 @@ settings = get_settings()
 db = SessionLocal()
 
 try:
+    disable_legacy_openai_configs()
+
     upsert_role(
         "admin",
         "管理员",
@@ -179,17 +204,17 @@ try:
         },
     )
     upsert_source_config(
-        source_code="stock_openai_report",
-        source_name="OpenAI 股票报告生成",
+        source_code="gemini_chat_generation",
+        source_name="Gemini 基础聊天生成",
         object_type=ObjectType.STOCK.value,
         source_type=SourceType.API.value,
-        base_url=settings.openai_base_url,
+        base_url=settings.gemini_base_url,
         authority_level=AuthorityLevel.HIGH.value,
         priority_weight=10.0,
         strategy_json={
-            "keywords": ["分析摘要", "结构化报告", "引用式生成"],
+            "keywords": ["基础聊天", "对话生成", "Gemini"],
             "requires_model": True,
-            "report_generation": True,
+            "chat_generation": True,
         },
     )
 

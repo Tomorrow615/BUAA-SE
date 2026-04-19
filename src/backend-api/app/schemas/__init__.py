@@ -13,6 +13,7 @@ from app.schemas.admin import (
     AdminUserSummaryResponse,
 )
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserProfileResponse
+from app.schemas.chat import ChatCompletionRequest, ChatCompletionResponse, ChatMessageRequest
 from app.schemas.research import (
     ModelConfigSummaryResponse,
     ResearchTaskCreateRequest,
@@ -34,6 +35,9 @@ __all__ = [
     "AdminRecentTaskResponse",
     "AdminUserListResponse",
     "AdminUserSummaryResponse",
+    "ChatCompletionRequest",
+    "ChatCompletionResponse",
+    "ChatMessageRequest",
     "LoginRequest",
     "ModelConfigSummaryResponse",
     "RegisterRequest",

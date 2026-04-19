@@ -4,8 +4,10 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import selectinload
 
 from research_worker.bootstrap import bootstrap_backend_api_path
@@ -22,6 +24,7 @@ from app.models.enums import (
     ReportStatus,
     ReportType,
     StageLogStatus,
+    SourceType,
     TaskStatus,
 )
 from app.services.ai_research import generate_stock_analysis
@@ -46,6 +49,41 @@ class WorkerRunSummary:
     claimed_tasks: int = 0
     completed_tasks: int = 0
     failed_tasks: int = 0
+
+
+def build_web_material_payloads_from_analysis(analysis: Any) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for item in getattr(analysis, "grounded_sources", []):
+        source_url = item.uri
+        stored_source_url = source_url if source_url and len(source_url) <= 500 else None
+        domain = item.domain or (urlparse(source_url).netloc if source_url else None)
+        dedup_key = f"{item.source_id}:{(item.title or 'Gemini Google Search')[:180]}"
+        payloads.append(
+            {
+                "topic_tag": item.source_id,
+                "title": item.title,
+                "summary": "Gemini 联网检索在分析阶段使用的公开来源。",
+                "content_text": "\n".join(
+                    line
+                    for line in [
+                        f"来源编号：{item.source_id}",
+                        f"来源标题：{item.title}",
+                        f"来源域名：{domain or '未知'}",
+                        f"来源链接：{source_url or '未提供'}",
+                    ]
+                    if line
+                ),
+                "source_name": item.title or domain or "Gemini Google Search",
+                "source_url": stored_source_url,
+                "source_type": SourceType.WEB.value,
+                "authority_level": "MEDIUM",
+                "published_at": None,
+                "relevance_score": 7.8,
+                "is_selected": True,
+                "dedup_key": dedup_key,
+            }
+        )
+    return payloads
 
 
 def claim_next_queued_task(worker_name: str) -> int | None:
@@ -111,7 +149,55 @@ def collect_task_materials(task_id: int, worker_name: str) -> None:
 
         lookback_days = parse_lookback_days(task.time_range, settings.stock_lookback_days)
         original_query = task.object_name
-        bundle = collect_stock_research_bundle(original_query, lookback_days=lookback_days)
+        try:
+            bundle = collect_stock_research_bundle(original_query, lookback_days=lookback_days)
+        except Exception as collection_error:
+            if not settings.gemini_api_key or not settings.gemini_google_search_enabled:
+                raise
+
+            task.materials.clear()
+            task.status = TaskStatus.ANALYZING.value
+            task.current_stage = TaskStatus.ANALYZING.value
+            task.progress_percent = ANALYZING_PROGRESS
+            task.result_summary = (
+                "内置股票数据源暂时不可用，已切换到 Gemini 联网研究模式。"
+            )
+            task.task_params = {
+                **(task.task_params or {}),
+                "original_object_query": original_query,
+                "lookback_days": lookback_days,
+                "material_collection_mode": "GEMINI_GOOGLE_SEARCH",
+                "material_collection_error": str(collection_error),
+            }
+
+            append_stage_log(
+                task,
+                stage_code=TaskStatus.COLLECTING.value,
+                log_status=StageLogStatus.SKIPPED.value,
+                message="Primary stock data collection failed. Switched to Gemini web-grounded analysis.",
+                operator_type=OperatorType.WORKER.value,
+                detail_data={
+                    "worker_name": worker_name,
+                    "lookback_days": lookback_days,
+                    "fallback_mode": "GEMINI_GOOGLE_SEARCH",
+                    "error_message": str(collection_error),
+                },
+            )
+            append_stage_log(
+                task,
+                stage_code=TaskStatus.ANALYZING.value,
+                log_status=StageLogStatus.RUNNING.value,
+                message="Gemini web-grounded analysis is starting because local stock sources were unavailable.",
+                operator_type=OperatorType.WORKER.value,
+                detail_data={
+                    "worker_name": worker_name,
+                    "progress_percent": ANALYZING_PROGRESS,
+                    "analysis_mode": "GEMINI_GOOGLE_SEARCH",
+                },
+            )
+
+            db.commit()
+            return
 
         source_config = db.scalar(
             select(SourceConfig).where(
@@ -215,8 +301,12 @@ def analyze_task(task_id: int, worker_name: str) -> None:
 
         requested_model_name = (
             task.selected_model.model_name
-            if task.selected_model and task.selected_model.provider_code == "openai"
-            else settings.openai_model_name
+            if task.selected_model and task.selected_model.provider_code == "gemini"
+            else settings.gemini_model_name
+        )
+        use_google_search = (
+            str(task.task_params.get("material_collection_mode") or "").upper()
+            == "GEMINI_GOOGLE_SEARCH"
         )
 
         analysis = generate_stock_analysis(
@@ -227,7 +317,29 @@ def analyze_task(task_id: int, worker_name: str) -> None:
             research_goal=task.research_goal,
             materials=task.materials,
             lookback_days=int(task.task_params.get("lookback_days") or settings.stock_lookback_days),
+            allow_google_search=use_google_search,
         )
+
+        if use_google_search and not task.materials and analysis.grounded_sources:
+            for payload in build_web_material_payloads_from_analysis(analysis):
+                task.materials.append(
+                    Material(
+                        task_id=task.id,
+                        source_config_id=None,
+                        title=str(payload["title"]),
+                        summary=str(payload["summary"]) if payload["summary"] else None,
+                        content_text=str(payload["content_text"]) if payload["content_text"] else None,
+                        source_name=str(payload["source_name"]),
+                        source_url=str(payload["source_url"]) if payload["source_url"] else None,
+                        source_type=str(payload["source_type"]),
+                        authority_level=str(payload["authority_level"]),
+                        published_at=payload["published_at"],
+                        topic_tag=str(payload["topic_tag"]) if payload["topic_tag"] else None,
+                        relevance_score=float(payload["relevance_score"]),
+                        dedup_key=str(payload["dedup_key"]) if payload["dedup_key"] else None,
+                        is_selected=bool(payload["is_selected"]),
+                    )
+                )
 
         task.analysis_results.append(
             AnalysisResult(
@@ -244,6 +356,15 @@ def analyze_task(task_id: int, worker_name: str) -> None:
                     "provider_code": analysis.provider_code,
                     "used_fallback": analysis.used_fallback,
                     "raw_response_text": analysis.raw_response_text,
+                    "grounded_sources": [
+                        {
+                            "source_id": item.source_id,
+                            "title": item.title,
+                            "uri": item.uri,
+                            "domain": item.domain,
+                        }
+                        for item in analysis.grounded_sources
+                    ],
                     "key_findings": analysis.key_findings,
                     "risks": analysis.risks,
                     "opportunities": analysis.opportunities,
@@ -266,6 +387,8 @@ def analyze_task(task_id: int, worker_name: str) -> None:
                 "worker_name": worker_name,
                 "model_name": analysis.model_name,
                 "used_fallback": analysis.used_fallback,
+                "used_google_search": use_google_search,
+                "grounded_source_count": len(analysis.grounded_sources),
             },
         )
         append_stage_log(
@@ -436,7 +559,18 @@ def run_worker(
         if max_tasks is not None and summary.claimed_tasks >= max_tasks:
             break
 
-        task_id = claim_next_queued_task(worker_name)
+        try:
+            task_id = claim_next_queued_task(worker_name)
+        except OperationalError as error:
+            logger.warning(
+                "Worker could not reach PostgreSQL while polling queued tasks: %s",
+                error,
+            )
+            if once:
+                break
+            time.sleep(poll_interval)
+            continue
+
         if task_id is None:
             if once:
                 break

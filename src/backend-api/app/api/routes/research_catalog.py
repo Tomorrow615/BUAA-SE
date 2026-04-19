@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps.auth import CurrentUserContext, get_current_user
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import ModelConfig
 from app.models.enums import ObjectType, SceneType
@@ -40,7 +41,11 @@ def list_research_models(
     _: CurrentUserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ResearchModelOptionListResponse:
-    statement = select(ModelConfig).where(ModelConfig.is_enabled.is_(True))
+    settings = get_settings()
+    statement = select(ModelConfig).where(
+        ModelConfig.is_enabled.is_(True),
+        ModelConfig.provider_code == settings.default_model_provider,
+    )
 
     if object_type is not None:
         scene_type = OBJECT_TYPE_TO_SCENE[object_type]

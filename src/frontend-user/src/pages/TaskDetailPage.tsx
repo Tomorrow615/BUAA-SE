@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import { StatePanel } from "../components/StatePanel";
 import { useAuth } from "../context/AuthContext";
 import {
   fetchResearchTaskDetail,
   fetchResearchTaskStatus,
+  formatAuthorityLevel,
   formatDateTime,
   formatObjectType,
+  formatOperatorType,
+  formatReportStatus,
+  formatReportType,
+  formatSourceStrategy,
+  formatSourceType,
+  formatTaskParamLabel,
+  formatTaskParamValue,
   formatTaskStatus,
   isTerminalTaskStatus,
   toStatusClassName,
@@ -18,22 +27,6 @@ import {
   type ResearchTaskStatusResponse,
   type TaskStageLog,
 } from "../lib/research";
-
-function formatTaskParamValue(value: unknown): string {
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
-  }
-
-  if (value === null || value === undefined) {
-    return "暂无";
-  }
-
-  return JSON.stringify(value, null, 2);
-}
 
 function splitTextLines(value: string | null | undefined): string[] {
   if (!value) {
@@ -53,6 +46,7 @@ function renderTextList(
   emptyText: string,
 ) {
   const items = splitTextLines(value);
+
   return (
     <div className="result-block">
       <h3>{title}</h3>
@@ -67,6 +61,42 @@ function renderTextList(
       )}
     </div>
   );
+}
+
+function resolveReportSourcePresentation(
+  task: ResearchTaskDetail,
+  materials: ResearchMaterial[],
+): { badge: string; description: string } {
+  const materialCollectionMode = String(
+    task.task_params?.material_collection_mode || "",
+  ).toUpperCase();
+
+  if (materialCollectionMode === "GEMINI_GOOGLE_SEARCH") {
+    return {
+      badge: "Gemini 联网补充",
+      description:
+        "当前报告是在内置数据源不可用时，改由 Gemini 联网检索公开来源后整理生成的。",
+    };
+  }
+
+  if (materials.some((item) => item.source_type === "API")) {
+    return {
+      badge: "内置数据源",
+      description: "当前报告主要基于已接入的数据接口与模型分析结果整理生成。",
+    };
+  }
+
+  if (materials.some((item) => item.source_type === "WEB")) {
+    return {
+      badge: "网页资料整理",
+      description: "当前报告主要基于网页资料与模型分析结果整理生成。",
+    };
+  }
+
+  return {
+    badge: "研究结果整理",
+    description: "当前报告基于本次任务沉淀的研究材料与模型分析结果生成。",
+  };
 }
 
 export function TaskDetailPage() {
@@ -120,9 +150,7 @@ export function TaskDetailPage() {
         }
 
         setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "任务状态刷新失败，请稍后重试。",
+          error instanceof Error ? error.message : "任务状态刷新失败，请稍后重试。",
         );
       }
     }
@@ -156,9 +184,7 @@ export function TaskDetailPage() {
         }
 
         setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "任务详情加载失败，请稍后重试。",
+          error instanceof Error ? error.message : "任务详情加载失败，请稍后重试。",
         );
       } finally {
         if (!cancelled) {
@@ -232,26 +258,42 @@ export function TaskDetailPage() {
     null;
   const latestReport: ResearchReport | null =
     liveStatus?.latest_report ?? taskDetail?.latest_report ?? null;
+  const reportSourcePresentation = activeTask
+    ? resolveReportSourcePresentation(activeTask, materials)
+    : null;
 
   return (
-    <div className="page-section">
-      <header className="page-title">
-        <p className="eyebrow">任务详情</p>
-        <h1>股票调研任务详情</h1>
-        <p>
-          当前页面会先请求 <code>GET /research/tasks/{"{task_id}"}</code>{" "}
-          获取完整详情，任务未结束时再轮询{" "}
-          <code>GET /research/tasks/{"{task_id}"}/status</code>{" "}
-          同步最新进度、材料和报告结果。
-        </p>
-        <div className="page-meta-line">
+    <div className="page-section task-detail-page">
+      <header className="page-title detail-hero">
+        <div>
+          <p className="eyebrow">研究交付</p>
+          <h1>研究任务详情</h1>
+          <p>
+            当前页面围绕研究总览、成果资产、材料引用与过程日志组织。导出、收藏、追问等入口已按最终形态预留。
+          </p>
+        </div>
+
+        <div className="detail-hero-actions">
           <p className="field-hint">最近刷新：{formatDateTime(lastUpdatedAt)}</p>
           <div className="button-row button-row-tight">
-            <Link className="button-secondary" to="/tasks">
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => {
+                void handleManualRefresh();
+              }}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? "正在刷新..." : "刷新状态"}
+            </button>
+            <button type="button" className="button-secondary" disabled>
+              导出 PDF
+            </button>
+            <button type="button" className="button-ghost" disabled>
+              收藏任务
+            </button>
+            <Link className="button-ghost" to="/tasks">
               返回任务中心
-            </Link>
-            <Link className="button-ghost" to="/workspace">
-              再发起一条
             </Link>
           </div>
         </div>
@@ -265,7 +307,7 @@ export function TaskDetailPage() {
         <StatePanel
           eyebrow="任务状态"
           title="正在加载任务详情"
-          description="当前正在请求任务详情与状态信息，请稍候。"
+          description="当前正在同步任务详情与状态信息，请稍候。"
         />
       ) : null}
 
@@ -296,7 +338,26 @@ export function TaskDetailPage() {
 
       {activeTask && activeStatus ? (
         <>
-          <section className="section-grid section-grid-wide">
+          <section className="overview-metric-grid detail-metric-grid">
+            <article className="overview-metric-card">
+              <strong>{formatTaskStatus(activeStatus.status)}</strong>
+              <span>当前状态</span>
+            </article>
+            <article className="overview-metric-card">
+              <strong>{activeStatus.progress_percent}%</strong>
+              <span>任务进度</span>
+            </article>
+            <article className="overview-metric-card">
+              <strong>{materials.length}</strong>
+              <span>研究材料</span>
+            </article>
+            <article className="overview-metric-card">
+              <strong>{latestReport ? latestReport.report_version : "-"}</strong>
+              <span>报告版本</span>
+            </article>
+          </section>
+
+          <section className="section-grid section-grid-wide detail-overview-grid">
             <article className="section-card">
               <div className="task-card-header">
                 <div>
@@ -309,12 +370,12 @@ export function TaskDetailPage() {
               </div>
 
               <p className="task-summary">
-                {activeTask.research_goal || "当前未填写额外调研目标。"}
+                {activeTask.research_goal || "当前未填写额外研究目标。"}
               </p>
 
               <dl className="meta-grid">
                 <div>
-                  <dt>对象类型</dt>
+                  <dt>研究对象</dt>
                   <dd>{formatObjectType(activeTask.object_type)}</dd>
                 </div>
                 <div>
@@ -326,31 +387,7 @@ export function TaskDetailPage() {
                   <dd>{formatTaskStatus(activeStatus.current_stage)}</dd>
                 </div>
                 <div>
-                  <dt>当前进度</dt>
-                  <dd>{activeStatus.progress_percent}%</dd>
-                </div>
-                <div>
-                  <dt>创建时间</dt>
-                  <dd>{formatDateTime(activeTask.created_at)}</dd>
-                </div>
-                <div>
-                  <dt>更新时间</dt>
-                  <dd>{formatDateTime(activeTask.updated_at)}</dd>
-                </div>
-                <div>
-                  <dt>开始时间</dt>
-                  <dd>{formatDateTime(activeStatus.started_at ?? activeTask.started_at)}</dd>
-                </div>
-                <div>
-                  <dt>完成时间</dt>
-                  <dd>
-                    {formatDateTime(
-                      activeStatus.completed_at ?? activeTask.completed_at,
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>模型</dt>
+                  <dt>研究模型</dt>
                   <dd>{activeTask.selected_model?.display_name || "默认模型"}</dd>
                 </div>
                 <div>
@@ -359,11 +396,19 @@ export function TaskDetailPage() {
                 </div>
                 <div>
                   <dt>信息源策略</dt>
-                  <dd>{activeTask.source_strategy || "DEFAULT"}</dd>
+                  <dd>{formatSourceStrategy(activeTask.source_strategy)}</dd>
                 </div>
                 <div>
-                  <dt>材料数量</dt>
-                  <dd>{materials.length}</dd>
+                  <dt>创建时间</dt>
+                  <dd>{formatDateTime(activeTask.created_at)}</dd>
+                </div>
+                <div>
+                  <dt>完成时间</dt>
+                  <dd>
+                    {formatDateTime(
+                      activeStatus.completed_at ?? activeTask.completed_at,
+                    )}
+                  </dd>
                 </div>
               </dl>
 
@@ -384,61 +429,165 @@ export function TaskDetailPage() {
                   <p>{activeStatus.result_summary}</p>
                 </div>
               ) : null}
-
-              {activeStatus.error_message ? (
-                <p className="form-message form-message-error">
-                  {activeStatus.error_message}
-                </p>
-              ) : null}
-
-              <div className="button-row button-row-tight">
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => {
-                    void handleManualRefresh();
-                  }}
-                  disabled={isRefreshing}
-                >
-                  {isRefreshing ? "正在刷新..." : "刷新状态"}
-                </button>
-                <Link className="button-ghost" to="/tasks">
-                  返回任务中心
-                </Link>
-              </div>
             </article>
 
             <article className="section-card">
-              <h2>任务参数</h2>
+              <h2>交付与协作</h2>
+              <div className="delivery-grid">
+                <div className="delivery-card">
+                  <strong>Markdown 报告</strong>
+                  <span>{latestReport ? "已生成" : "待生成"}</span>
+                </div>
+                <div className="delivery-card">
+                  <strong>PDF 导出</strong>
+                  <span>即将开放</span>
+                </div>
+                <div className="delivery-card">
+                  <strong>Word 导出</strong>
+                  <span>即将开放</span>
+                </div>
+                <div className="delivery-card">
+                  <strong>追问报告</strong>
+                  <span>即将开放</span>
+                </div>
+              </div>
+
+              <div className="button-row">
+                <button type="button" className="button-secondary" disabled>
+                  导出 Word
+                </button>
+                <button type="button" className="button-secondary" disabled>
+                  追问报告
+                </button>
+                <button type="button" className="button-ghost" disabled>
+                  设置提醒
+                </button>
+              </div>
+
+              <h2 className="section-subtitle">研究配置</h2>
               <dl className="kv-list">
                 {Object.keys(activeTask.task_params).length > 0 ? (
                   Object.entries(activeTask.task_params).map(([key, value]) => (
                     <div key={key}>
-                      <dt>{key}</dt>
-                      <dd>{formatTaskParamValue(value)}</dd>
+                      <dt>{formatTaskParamLabel(key)}</dt>
+                      <dd>{formatTaskParamValue(key, value)}</dd>
                     </div>
                   ))
                 ) : (
                   <div>
-                    <dt>task_params</dt>
-                    <dd>暂无额外参数</dd>
+                    <dt>研究配置</dt>
+                    <dd>暂无额外配置</dd>
                   </div>
                 )}
               </dl>
+            </article>
+          </section>
 
-              <div className="info-panel">
-                <strong>当前联调说明</strong>
-                <p>
-                  第 8 步最小闭环已经接入真实股票行情采集、AI 分析与报告写库，
-                  当前任务详情页会持续展示最新材料、分析结果和 Markdown 报告。
+          <section className="section-card detail-report-card">
+            <div className="detail-report-head">
+              <div>
+                <h2>研究报告正文</h2>
+                <p className="detail-section-copy">
+                  这里展示当前任务最新生成的一版完整报告，适合直接通读结论、发现和风险。
                 </p>
               </div>
-            </article>
+
+              {latestReport ? (
+                <div className="detail-report-version">
+                  <strong>第 {latestReport.report_version} 版</strong>
+                  <span>{formatReportType(latestReport.report_type)}</span>
+                </div>
+              ) : null}
+            </div>
+
+            {latestReport ? (
+              <div className="detail-report-stack">
+                <div className="report-stage-card">
+                  <div className="report-stage-card-head">
+                    <div>
+                      <h3>{latestReport.title}</h3>
+                      <p className="detail-section-copy">
+                        {reportSourcePresentation?.description ||
+                          "当前报告已经生成，可直接阅读正文。"}
+                      </p>
+                    </div>
+
+                    <div className="report-stage-badges">
+                      <span className="soft-badge soft-badge-cool">
+                        {formatReportStatus(latestReport.status)}
+                      </span>
+                      {reportSourcePresentation ? (
+                        <span className="soft-badge soft-badge-warm">
+                          {reportSourcePresentation.badge}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="report-stage-meta">
+                    <span>更新时间：{formatDateTime(latestReport.updated_at)}</span>
+                    <span>版本说明：最新可查看正文</span>
+                  </div>
+                </div>
+
+                {latestReport.markdown_content ? (
+                  <div className="report-markdown-surface">
+                    <MarkdownRenderer content={latestReport.markdown_content} />
+                  </div>
+                ) : (
+                  <p className="detail-empty-copy">当前还没有可展示的报告正文。</p>
+                )}
+              </div>
+            ) : (
+              <p className="detail-empty-copy">报告阶段尚未生成内容。</p>
+            )}
+          </section>
+
+          <section className="section-card detail-analysis-card">
+            <div className="toolbar-inline">
+              <div>
+                <h2>分析结果概览</h2>
+                <p className="detail-section-copy">
+                  这里展示模型整理出的摘要、关键发现、风险和机会，适合快速扫读。
+                </p>
+              </div>
+              {latestAnalysis?.model_config_detail?.display_name ? (
+                <span className="field-hint">
+                  由 {latestAnalysis.model_config_detail.display_name} 生成
+                </span>
+              ) : null}
+            </div>
+
+            {latestAnalysis ? (
+              <div className="result-stack">
+                <div className="result-block">
+                  <h3>核心摘要</h3>
+                  <p>{latestAnalysis.summary || "暂无摘要。"}</p>
+                </div>
+                {renderTextList(
+                  "关键发现",
+                  latestAnalysis.key_findings,
+                  "当前还没有关键发现。",
+                )}
+                {renderTextList("风险提示", latestAnalysis.risks, "当前还没有风险项。")}
+                {renderTextList(
+                  "机会与观察",
+                  latestAnalysis.opportunities,
+                  "当前还没有机会项。",
+                )}
+                <div className="result-block">
+                  <h3>结论</h3>
+                  <p>{latestAnalysis.conclusion || "暂无结论。"}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="detail-empty-copy">分析阶段尚未产出结果。</p>
+            )}
           </section>
 
           <section className="section-card">
             <div className="toolbar-inline">
-              <h2>调研材料</h2>
+              <h2>研究材料</h2>
               <span className="field-hint">共 {materials.length} 条</span>
             </div>
 
@@ -455,7 +604,7 @@ export function TaskDetailPage() {
                             <span className="reference-chip">{material.topic_tag}</span>
                           ) : null}
                           <span className="status-chip">
-                            {material.authority_level}
+                            {formatAuthorityLevel(material.authority_level)}
                           </span>
                         </div>
                         <h3>{material.title}</h3>
@@ -474,10 +623,10 @@ export function TaskDetailPage() {
                       </div>
                       <div>
                         <dt>类型</dt>
-                        <dd>{material.source_type}</dd>
+                        <dd>{formatSourceType(material.source_type)}</dd>
                       </div>
                       <div>
-                        <dt>相关性</dt>
+                        <dt>相关度</dt>
                         <dd>{material.relevance_score.toFixed(2)}</dd>
                       </div>
                     </dl>
@@ -502,75 +651,14 @@ export function TaskDetailPage() {
             )}
           </section>
 
-          <section className="section-grid section-grid-wide">
-            <article className="section-card">
-              <div className="toolbar-inline">
-                <h2>分析结果</h2>
-                {latestAnalysis?.model_config_detail?.display_name ? (
-                  <span className="field-hint">
-                    模型：{latestAnalysis.model_config_detail.display_name}
-                  </span>
-                ) : null}
-              </div>
-
-              {latestAnalysis ? (
-                <div className="result-stack">
-                  <div className="result-block">
-                    <h3>摘要</h3>
-                    <p>{latestAnalysis.summary || "暂无摘要。"}</p>
-                  </div>
-                  {renderTextList(
-                    "核心发现",
-                    latestAnalysis.key_findings,
-                    "当前还没有核心发现。",
-                  )}
-                  {renderTextList("风险", latestAnalysis.risks, "当前还没有风险项。")}
-                  {renderTextList(
-                    "机会",
-                    latestAnalysis.opportunities,
-                    "当前还没有机会项。",
-                  )}
-                  <div className="result-block">
-                    <h3>结论</h3>
-                    <p>{latestAnalysis.conclusion || "暂无结论。"}</p>
-                  </div>
-                </div>
-              ) : (
-                <p>分析阶段尚未产出结果。</p>
-              )}
-            </article>
-
-            <article className="section-card">
-              <div className="toolbar-inline">
-                <h2>最新报告</h2>
-                {latestReport ? (
-                  <span className="field-hint">
-                    版本 {latestReport.report_version} / {latestReport.report_type}
-                  </span>
-                ) : null}
-              </div>
-
-              {latestReport ? (
-                <div className="result-stack">
-                  <div className="result-block">
-                    <h3>{latestReport.title}</h3>
-                    <p>
-                      状态：{latestReport.status}，更新时间：
-                      {formatDateTime(latestReport.updated_at)}
-                    </p>
-                  </div>
-                  <pre className="text-preformatted report-markdown">
-                    {latestReport.markdown_content || "暂无报告正文。"}
-                  </pre>
-                </div>
-              ) : (
-                <p>报告阶段尚未生成内容。</p>
-              )}
-            </article>
-          </section>
-
           <section className="section-card">
-            <h2>阶段日志</h2>
+            <div className="toolbar-inline">
+              <h2>过程日志</h2>
+              <button type="button" className="button-ghost" disabled>
+                导出日志
+              </button>
+            </div>
+
             {stageLogs.length === 0 ? (
               <p>当前还没有阶段日志。</p>
             ) : (
@@ -587,7 +675,7 @@ export function TaskDetailPage() {
                     </div>
                     <p>{log.message}</p>
                     <small>
-                      {formatDateTime(log.created_at)} / {log.operator_type}
+                      {formatDateTime(log.created_at)} · {formatOperatorType(log.operator_type)}
                     </small>
                   </div>
                 ))}

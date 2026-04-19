@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps.auth import CurrentUserContext, get_current_user
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import (
     AnalysisResult,
@@ -235,11 +236,13 @@ def serialize_task_status(task: ResearchTask) -> ResearchTaskStatusResponse:
 
 
 def resolve_model_config(db: Session, selected_model_id: int | None) -> ModelConfig:
+    settings = get_settings()
     if selected_model_id is not None:
         model = db.scalar(
             select(ModelConfig).where(
                 ModelConfig.id == selected_model_id,
                 ModelConfig.is_enabled.is_(True),
+                ModelConfig.provider_code == settings.default_model_provider,
             )
         )
         if model is None:
@@ -251,7 +254,11 @@ def resolve_model_config(db: Session, selected_model_id: int | None) -> ModelCon
 
     model = db.scalar(
         select(ModelConfig)
-        .where(ModelConfig.is_enabled.is_(True), ModelConfig.is_default.is_(True))
+        .where(
+            ModelConfig.is_enabled.is_(True),
+            ModelConfig.is_default.is_(True),
+            ModelConfig.provider_code == settings.default_model_provider,
+        )
         .order_by(ModelConfig.id.asc())
     )
     if model is not None:
@@ -259,7 +266,10 @@ def resolve_model_config(db: Session, selected_model_id: int | None) -> ModelCon
 
     model = db.scalar(
         select(ModelConfig)
-        .where(ModelConfig.is_enabled.is_(True))
+        .where(
+            ModelConfig.is_enabled.is_(True),
+            ModelConfig.provider_code == settings.default_model_provider,
+        )
         .order_by(ModelConfig.id.asc())
     )
     if model is None:

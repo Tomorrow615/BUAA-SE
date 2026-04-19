@@ -30,17 +30,19 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 120
     jwt_algorithm: str = "HS256"
 
-    default_model_provider: str = "openai"
-    default_model_name: str = "gpt-4.1-mini"
+    default_model_provider: str = "gemini"
+    default_model_name: str = "gemini-2.5-flash"
     default_admin_username: str = "admin"
     default_admin_email: str = "admin@example.com"
     default_admin_password: str = "change-this-admin-password"
     default_admin_display_name: str = "系统管理员"
 
-    openai_api_key: str | None = None
-    openai_base_url: str = "https://api.openai.com/v1"
-    openai_model_name: str = "gpt-4.1-mini"
-    openai_timeout_seconds: int = 90
+    gemini_api_key: str | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_model_name: str = "gemini-2.5-flash"
+    gemini_available_models_raw: str = ""
+    gemini_timeout_seconds: int = 90
+    gemini_google_search_enabled: bool = True
     stock_lookback_days: int = 30
 
     model_config = SettingsConfigDict(
@@ -71,6 +73,19 @@ class Settings(BaseSettings):
             for origin in self.cors_allowed_origins_raw.split(",")
             if origin.strip()
         ]
+
+    @property
+    def gemini_available_models(self) -> list[str]:
+        models: list[str] = []
+        for candidate in [
+            self.default_model_name,
+            self.gemini_model_name,
+            *self.gemini_available_models_raw.split(","),
+        ]:
+            normalized = candidate.strip()
+            if normalized and normalized not in models:
+                models.append(normalized)
+        return models
 
 
 @lru_cache

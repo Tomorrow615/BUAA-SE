@@ -2,65 +2,122 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 
+const objectTracks = [
+  {
+    title: "股票研究",
+    state: "已接通",
+    description: "已支持任务创建、行情采集、AI 分析、报告展示与聊天问答。",
+  },
+  {
+    title: "公司研究",
+    state: "界面已就绪",
+    description: "前端流程和入口已预留，后续补公司资料、公告与行业数据链路。",
+  },
+  {
+    title: "商品研究",
+    state: "界面已就绪",
+    description: "前端结构已具备，后续补行情、供需与周期性数据源。",
+  },
+];
+
+const featureCards = [
+  {
+    title: "统一研究入口",
+    description: "工作台统一容纳对象选择、模型配置、信息源策略与成果交付选项。",
+  },
+  {
+    title: "报告资产中心",
+    description: "任务详情围绕分析结果、报告正文、材料引用和阶段日志组织。",
+  },
+  {
+    title: "AI 协作空间",
+    description: "闲聊、数据优先问答、后续追问入口都放在同一套交互框架里。",
+  },
+];
+
 export function HomePage() {
   const { status } = useAuth();
 
   return (
-    <div className="public-page">
-      <section className="hero-card">
-        {/* <p className="eyebrow">第 7 步 · 用户端页面骨架已完成</p> */}
-        {/* <h1>用户端已经完成主链路接通与阶段验收</h1> */}
-        {/* <p>
-          当前用户端已经完成真实登录注册、任务创建、任务列表、任务详情、状态轮询和体验收口。
-          这一阶段的目标是把可演示、可联调、可继续扩展的页面骨架正式搭稳。
-        </p> */}
-        <h1>商业对象智能深度调研分析平台——用户端</h1>
+    <div className="public-page public-page-home">
+      <section className="hero-card hero-card-home">
+        <div className="hero-home-grid">
+          <div className="hero-home-copy">
+            <p className="eyebrow">深度研究平台</p>
+            <h1>商业对象智能深度调研分析平台</h1>
+            <p className="hero-home-summary">
+              以统一工作台承接股票、公司、商品三类研究对象，用数据源、模型能力和报告资产把整个研究流程串起来。
+            </p>
 
-        <div className="button-row">
-          {status === "authenticated" ? (
-            <Link className="button-primary" to="/workspace">
-              进入调研工作台
-            </Link>
-          ) : (
-            <Link className="button-primary" to="/login">
-              去登录
-            </Link>
-          )}
-          <Link className="button-secondary" to="/tasks">
-            查看任务中心
-          </Link>
-          {status === "authenticated" ? (
-            <Link className="button-ghost" to="/profile">
-              查看个人中心
-            </Link>
-          ) : (
-            <Link className="button-ghost" to="/register">
-              去注册
-            </Link>
-          )}
+            <div className="hero-stat-row">
+              <div className="hero-stat-card">
+                <strong>3 类</strong>
+                <span>研究对象入口</span>
+              </div>
+              <div className="hero-stat-card">
+                <strong>1 条</strong>
+                <span>已跑通股票链路</span>
+              </div>
+              <div className="hero-stat-card">
+                <strong>多层</strong>
+                <span>后续模型与数据源可扩展</span>
+              </div>
+            </div>
+
+            <div className="button-row">
+              {status === "authenticated" ? (
+                <Link className="button-primary" to="/workspace">
+                  进入研究工作台
+                </Link>
+              ) : (
+                <Link className="button-primary" to="/login">
+                  登录后开始使用
+                </Link>
+              )}
+              <Link className="button-secondary" to="/tasks">
+                查看任务中心
+              </Link>
+              {status === "authenticated" ? (
+                <Link className="button-ghost" to="/chat">
+                  打开 AI 助理
+                </Link>
+              ) : (
+                <Link className="button-ghost" to="/register">
+                  创建用户账号
+                </Link>
+              )}
+            </div>
+          </div>
+
+          <div className="hero-home-panel">
+            <div className="hero-panel-highlight">
+              <span>当前可演示主链路</span>
+              <strong>股票研究任务 → 材料采集 → AI 报告</strong>
+            </div>
+
+            <div className="hero-panel-track-list">
+              {objectTracks.map((item) => (
+                <article key={item.title} className="hero-track-card">
+                  <div className="hero-track-head">
+                    <h2>{item.title}</h2>
+                    <span>{item.state}</span>
+                  </div>
+                  <p>{item.description}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* <section className="section-grid">
-        <article className="section-card">
-          <h2>这一步已经完成什么</h2>
-          <ul className="placeholder-list">
-            <li>完成真实登录、注册与当前用户恢复</li>
-            <li>完成调研工作台、任务中心和任务详情主链路</li>
-            <li>完成加载态、空状态、错误反馈和快捷入口收口</li>
-            <li>完成第 7 步统一构建验收</li>
-          </ul>
-        </article>
-
-        <article className="section-card">
-          <h2>下一步接什么</h2>
-          <ul className="placeholder-list">
-            <li>第 8 步：继续补 AI、真实数据源和展示增强能力</li>
-            <li>继续补前后台更细的交互体验和视觉强化</li>
-            <li>再往后衔接更完整的分析、报告和治理能力</li>
-          </ul>
-        </article>
-      </section> */}
+      <section className="section-grid feature-grid-home">
+        {featureCards.map((item) => (
+          <article key={item.title} className="section-card feature-card-home">
+            <h2>{item.title}</h2>
+            <p>{item.description}</p>
+          </article>
+        ))}
+      </section>
     </div>
   );
 }

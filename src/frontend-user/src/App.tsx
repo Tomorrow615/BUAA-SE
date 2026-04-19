@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { RouteGuard } from "./components/RouteGuard";
 import { UserShell } from "./components/UserShell";
 import { HomePage } from "./pages/HomePage";
+import { ChatPage } from "./pages/ChatPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -21,6 +22,7 @@ export default function App() {
 
         <Route element={<RouteGuard />}>
           <Route element={<UserShell />}>
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
