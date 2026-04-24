@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SRC_DIR = Path(__file__).resolve().parents[3]
 ENV_FILE = SRC_DIR / ".env"
+LOCAL_ENV_FILE = SRC_DIR / ".env.local"
 
 
 class Settings(BaseSettings):
@@ -44,9 +45,14 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: int = 90
     gemini_google_search_enabled: bool = True
     stock_lookback_days: int = 30
+    alpha_vantage_api_key: str | None = None
+    fred_api_key: str | None = None
+    eia_api_key: str | None = None
+    sec_user_agent: str = "BUAA-SE business research demo wangmt615@gmail.com"
+    tushare_token: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
+        env_file=(ENV_FILE, LOCAL_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

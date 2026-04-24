@@ -64,7 +64,11 @@ Environment file:
 
 ```powershell
 Copy-Item .env.example .env
+Copy-Item .env.example .env.local
 ```
+
+Use `src/.env` for shared defaults and `src/.env.local` for real local secrets.
+`src/.env.local` is ignored by Git and overrides `src/.env`, so Gemini keys and other API keys can stay local while the repository keeps safe placeholders.
 
 ## Manual startup
 

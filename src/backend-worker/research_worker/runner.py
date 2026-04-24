@@ -4,6 +4,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy import select
@@ -27,13 +28,9 @@ from app.models.enums import (
     SourceType,
     TaskStatus,
 )
-from app.services.ai_research import generate_stock_analysis
+from app.services.ai_research import format_object_type_label, generate_business_analysis
+from app.services.business_sources import collect_research_materials
 from app.services.research_tasks import append_stage_log
-from app.services.stock_market import (
-    build_stock_material_payloads,
-    collect_stock_research_bundle,
-    parse_lookback_days,
-)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -112,7 +109,10 @@ def claim_next_queued_task(worker_name: str) -> int | None:
             task,
             stage_code=TaskStatus.COLLECTING.value,
             log_status=StageLogStatus.RUNNING.value,
-            message=f"Worker {worker_name} started stock material collection.",
+            message=(
+                f"Worker {worker_name} started "
+                f"{task.object_type.lower()} material collection."
+            ),
             operator_type=OperatorType.WORKER.value,
             detail_data={
                 "worker_name": worker_name,
@@ -144,70 +144,26 @@ def collect_task_materials(task_id: int, worker_name: str) -> None:
         ).first()
         if task is None:
             raise RuntimeError(f"Research task {task_id} was not found.")
-        if task.object_type != ObjectType.STOCK.value:
-            raise RuntimeError("Step 8 minimal implementation currently supports STOCK only.")
 
-        lookback_days = parse_lookback_days(task.time_range, settings.stock_lookback_days)
         original_query = task.object_name
-        try:
-            bundle = collect_stock_research_bundle(original_query, lookback_days=lookback_days)
-        except Exception as collection_error:
-            if not settings.gemini_api_key or not settings.gemini_google_search_enabled:
-                raise
-
-            task.materials.clear()
-            task.status = TaskStatus.ANALYZING.value
-            task.current_stage = TaskStatus.ANALYZING.value
-            task.progress_percent = ANALYZING_PROGRESS
-            task.result_summary = (
-                "内置股票数据源暂时不可用，已切换到 Gemini 联网研究模式。"
-            )
-            task.task_params = {
-                **(task.task_params or {}),
-                "original_object_query": original_query,
-                "lookback_days": lookback_days,
-                "material_collection_mode": "GEMINI_GOOGLE_SEARCH",
-                "material_collection_error": str(collection_error),
-            }
-
-            append_stage_log(
-                task,
-                stage_code=TaskStatus.COLLECTING.value,
-                log_status=StageLogStatus.SKIPPED.value,
-                message="Primary stock data collection failed. Switched to Gemini web-grounded analysis.",
-                operator_type=OperatorType.WORKER.value,
-                detail_data={
-                    "worker_name": worker_name,
-                    "lookback_days": lookback_days,
-                    "fallback_mode": "GEMINI_GOOGLE_SEARCH",
-                    "error_message": str(collection_error),
-                },
-            )
-            append_stage_log(
-                task,
-                stage_code=TaskStatus.ANALYZING.value,
-                log_status=StageLogStatus.RUNNING.value,
-                message="Gemini web-grounded analysis is starting because local stock sources were unavailable.",
-                operator_type=OperatorType.WORKER.value,
-                detail_data={
-                    "worker_name": worker_name,
-                    "progress_percent": ANALYZING_PROGRESS,
-                    "analysis_mode": "GEMINI_GOOGLE_SEARCH",
-                },
-            )
-
-            db.commit()
-            return
-
-        source_config = db.scalar(
-            select(SourceConfig).where(
-                SourceConfig.source_code == "stock_eastmoney_public_api",
-                SourceConfig.is_enabled.is_(True),
-            )
+        collected = collect_research_materials(
+            settings,
+            object_type=task.object_type,
+            object_name=original_query,
+            research_goal=task.research_goal,
+            time_range=task.time_range,
+            source_strategy=task.source_strategy,
         )
 
         task.materials.clear()
-        for payload in build_stock_material_payloads(bundle):
+        source_configs = {
+            source.source_name: source
+            for source in db.scalars(
+                select(SourceConfig).where(SourceConfig.is_enabled.is_(True))
+            ).all()
+        }
+        for payload in collected.materials:
+            source_config = source_configs.get(str(payload["source_name"]))
             task.materials.append(
                 Material(
                     task_id=task.id,
@@ -227,22 +183,22 @@ def collect_task_materials(task_id: int, worker_name: str) -> None:
                 )
             )
 
-        task.object_name = bundle.stock.name
+        task.object_name = collected.display_name
         task.status = TaskStatus.ANALYZING.value
         task.current_stage = TaskStatus.ANALYZING.value
         task.progress_percent = ANALYZING_PROGRESS
         task.result_summary = (
-            f"Collected {len(task.materials)} stock materials for "
-            f"{bundle.stock.name} ({bundle.stock.symbol})."
+            f"Collected {len(task.materials)} {task.object_type.lower()} materials for "
+            f"{collected.display_name}."
         )
         task.task_params = {
             **(task.task_params or {}),
             "original_object_query": original_query,
-            "resolved_stock_name": bundle.stock.name,
-            "resolved_stock_symbol": bundle.stock.symbol,
-            "resolved_stock_code": bundle.stock.code,
-            "lookback_days": lookback_days,
-            "quote_page_url": bundle.stock.quote_page_url,
+            "resolved_object_name": collected.display_name,
+            "resolved_symbol": collected.symbol,
+            "lookback_days": collected.lookback_days,
+            "material_collection_mode": collected.collection_mode,
+            "material_collection_warnings": collected.warnings,
         }
 
         append_stage_log(
@@ -250,22 +206,24 @@ def collect_task_materials(task_id: int, worker_name: str) -> None:
             stage_code=TaskStatus.COLLECTING.value,
             log_status=StageLogStatus.COMPLETED.value,
             message=(
-                f"Collected {len(task.materials)} market materials for "
-                f"{bundle.stock.name} ({bundle.stock.symbol})."
+                f"Collected {len(task.materials)} research materials for "
+                f"{collected.display_name}."
             ),
             operator_type=OperatorType.WORKER.value,
             detail_data={
                 "worker_name": worker_name,
-                "lookback_days": lookback_days,
-                "resolved_stock_symbol": bundle.stock.symbol,
+                "lookback_days": collected.lookback_days,
+                "resolved_symbol": collected.symbol,
                 "material_count": len(task.materials),
+                "collection_mode": collected.collection_mode,
+                "warnings": collected.warnings,
             },
         )
         append_stage_log(
             task,
             stage_code=TaskStatus.ANALYZING.value,
             log_status=StageLogStatus.RUNNING.value,
-            message="Stock materials collected. AI analysis is starting.",
+            message="Research materials collected. AI analysis is starting.",
             operator_type=OperatorType.WORKER.value,
             detail_data={
                 "worker_name": worker_name,
@@ -306,14 +264,14 @@ def analyze_task(task_id: int, worker_name: str) -> None:
         )
         use_google_search = (
             str(task.task_params.get("material_collection_mode") or "").upper()
-            == "GEMINI_GOOGLE_SEARCH"
+            == "NO_SOURCE"
         )
 
-        analysis = generate_stock_analysis(
+        analysis = generate_business_analysis(
             settings=settings,
             model_name=requested_model_name,
-            stock_name=str(task.task_params.get("resolved_stock_name") or task.object_name),
-            stock_symbol=str(task.task_params.get("resolved_stock_symbol") or task.object_name),
+            object_type=task.object_type,
+            object_name=str(task.task_params.get("resolved_object_name") or task.object_name),
             research_goal=task.research_goal,
             materials=task.materials,
             lookback_days=int(task.task_params.get("lookback_days") or settings.stock_lookback_days),
@@ -438,7 +396,7 @@ def generate_task_report(task_id: int, worker_name: str) -> None:
             ReportType.FULL.value if requested_report_type == ReportType.FULL.value else ReportType.BRIEF.value
         )
 
-        report_title = f"{task.object_name} 股票调研报告"
+        report_title = f"{task.object_name} {format_object_type_label(task.object_type)}调研报告"
         markdown_content = (
             (latest_analysis.structured_payload or {}).get("report_markdown")
             or latest_analysis.summary
@@ -479,7 +437,7 @@ def generate_task_report(task_id: int, worker_name: str) -> None:
             task,
             stage_code=TaskStatus.COMPLETED.value,
             log_status=StageLogStatus.COMPLETED.value,
-            message="Stock research pipeline completed successfully.",
+            message="Research pipeline completed successfully.",
             operator_type=OperatorType.WORKER.value,
             detail_data={
                 "worker_name": worker_name,
@@ -488,7 +446,7 @@ def generate_task_report(task_id: int, worker_name: str) -> None:
         )
 
         db.commit()
-        logger.info("Completed stock research task id=%s.", task_id)
+        logger.info("Completed research task id=%s.", task_id)
     except Exception:
         db.rollback()
         raise
@@ -514,7 +472,7 @@ def mark_task_failed(task_id: int, worker_name: str, error: Exception) -> None:
             task,
             stage_code=TaskStatus.FAILED.value,
             log_status=StageLogStatus.FAILED.value,
-            message="Worker failed while executing the stock research pipeline.",
+            message="Worker failed while executing the research pipeline.",
             operator_type=OperatorType.WORKER.value,
             detail_data={
                 "worker_name": worker_name,

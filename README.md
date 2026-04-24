@@ -180,14 +180,20 @@ cd <your-repo-folder>
 
 ### 3. 配置环境变量
 
-项目运行配置位于 `src/.env`。
+项目运行配置分两层：
+
+- `src/.env`：可提交到 GitHub 的公共默认配置，只放占位值或团队可共享配置。
+- `src/.env.local`：本机私密配置，用来放真实 API Key；该文件已被 `.gitignore` 忽略，不会提交到 GitHub。
 
 先复制一份环境变量模板：
 
 ```powershell
 cd src
 Copy-Item .env.example .env
+Copy-Item .env.example .env.local
 ```
+
+本地开发时，把真实密钥写进 `src/.env.local`。程序会自动优先读取 `.env.local`，所以不需要来回改 `src/.env`。
 
 建议你第一次运行时，至少检查并确认下面这些配置：
 
@@ -204,8 +210,13 @@ Copy-Item .env.example .env
 | `DEFAULT_ADMIN_EMAIL` | 默认管理员邮箱 | 自定义即可 |
 | `DEFAULT_ADMIN_PASSWORD` | 默认管理员密码 | 建议改成你容易记住的密码 |
 | `CORS_ALLOWED_ORIGINS` | 前端跨域白名单 | 保持模板默认值即可 |
-| `GEMINI_API_KEY` | Gemini 模型调用密钥 | 填入你自己的 Gemini API Key |
+| `GEMINI_API_KEY` | Gemini 模型调用密钥 | 只填在 `src/.env.local`，不要提交到 GitHub |
 | `GEMINI_GOOGLE_SEARCH_ENABLED` | 是否允许 Gemini 联网检索兜底 | 本地开发建议保持 `true` |
+| `ALPHA_VANTAGE_API_KEY` | Alpha Vantage 数据源密钥 | 推荐填在 `src/.env.local` |
+| `FRED_API_KEY` | FRED 数据源密钥 | 推荐填在 `src/.env.local` |
+| `EIA_API_KEY` | EIA 数据源密钥 | 推荐填在 `src/.env.local` |
+| `SEC_USER_AGENT` | SEC EDGAR 请求头身份 | 可填项目名与联系邮箱 |
+| `TUSHARE_TOKEN` | Tushare Pro token | 可选，推荐填在 `src/.env.local` |
 
 如果只是本地首次启动，直接沿用模板中的数据库端口和主机配置即可。
 

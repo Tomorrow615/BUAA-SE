@@ -32,6 +32,7 @@ from app.schemas.research import (
     ResearchTaskSummaryResponse,
     TaskStageLogResponse,
 )
+from app.services.ai_research import format_object_type_label
 from app.services.research_tasks import append_stage_log
 
 router = APIRouter(prefix="/research/tasks", tags=["research-tasks"])
@@ -338,14 +339,9 @@ def create_research_task(
     current_user: CurrentUserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ResearchTaskDetailResponse:
-    if payload.object_type != ObjectType.STOCK:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Step 8 minimal implementation currently supports STOCK only.",
-        )
-
     model = resolve_model_config(db, payload.selected_model_id)
-    task_title = payload.task_title or f"{payload.object_name} 股票调研任务"
+    object_label = format_object_type_label(payload.object_type.value)
+    task_title = payload.task_title or f"{payload.object_name} {object_label}调研任务"
     source_strategy = payload.source_strategy or "DEFAULT"
     task_no = generate_task_no()
 

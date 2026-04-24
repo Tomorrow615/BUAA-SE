@@ -412,6 +412,10 @@ export function formatTaskParamLabel(key: string): string {
       return "识别后的交易代码";
     case "resolved_stock_code":
       return "识别后的股票代码";
+    case "resolved_object_name":
+      return "识别后的对象名称";
+    case "resolved_symbol":
+      return "识别后的代码";
     case "lookback_days":
       return "观察窗口";
     case "quote_page_url":
@@ -420,6 +424,8 @@ export function formatTaskParamLabel(key: string): string {
       return "材料采集模式";
     case "material_collection_error":
       return "采集失败原因";
+    case "material_collection_warnings":
+      return "采集提示";
     default:
       return key;
   }
@@ -459,6 +465,12 @@ export function formatTaskParamValue(key: string, value: unknown): string {
     switch (value) {
       case "GEMINI_GOOGLE_SEARCH":
         return "Gemini 联网补充";
+      case "MULTI_SOURCE":
+        return "多源采集";
+      case "MULTI_SOURCE_WITH_WEB":
+        return "多源采集 + 联网补充";
+      case "NO_SOURCE":
+        return "未采集到材料";
       default:
         return value;
     }

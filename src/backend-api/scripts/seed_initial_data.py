@@ -217,6 +217,84 @@ try:
             "chat_generation": True,
         },
     )
+    upsert_source_config(
+        source_code="alpha_vantage_market_data",
+        source_name="Alpha Vantage 市场与商品数据",
+        object_type=ObjectType.STOCK.value,
+        source_type=SourceType.API.value,
+        base_url="https://www.alphavantage.co/documentation/",
+        authority_level=AuthorityLevel.MEDIUM.value,
+        priority_weight=8.5,
+        strategy_json={
+            "keywords": ["股票概览", "全球行情", "商品价格", "新闻情绪"],
+            "requires_key": True,
+        },
+    )
+    upsert_source_config(
+        source_code="sec_edgar_company_data",
+        source_name="SEC EDGAR 公司披露数据",
+        object_type=ObjectType.COMPANY.value,
+        source_type=SourceType.API.value,
+        base_url="https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+        authority_level=AuthorityLevel.HIGH.value,
+        priority_weight=9.6,
+        strategy_json={
+            "keywords": ["公司公告", "10-K", "10-Q", "XBRL", "美股上市公司"],
+            "requires_user_agent": True,
+        },
+    )
+    upsert_source_config(
+        source_code="fred_macro_series",
+        source_name="FRED 宏观与商品序列",
+        object_type=ObjectType.COMMODITY.value,
+        source_type=SourceType.API.value,
+        base_url="https://fred.stlouisfed.org/docs/api/",
+        authority_level=AuthorityLevel.HIGH.value,
+        priority_weight=9.0,
+        strategy_json={
+            "keywords": ["宏观数据", "商品时间序列", "利率", "能源价格"],
+            "requires_key": True,
+        },
+    )
+    upsert_source_config(
+        source_code="eia_energy_data",
+        source_name="EIA 能源公开数据",
+        object_type=ObjectType.COMMODITY.value,
+        source_type=SourceType.API.value,
+        base_url="https://www.eia.gov/opendata/",
+        authority_level=AuthorityLevel.HIGH.value,
+        priority_weight=9.2,
+        strategy_json={
+            "keywords": ["原油", "天然气", "能源库存", "能源价格"],
+            "requires_key": True,
+        },
+    )
+    upsert_source_config(
+        source_code="gleif_lei_lookup",
+        source_name="GLEIF LEI 法人主体数据",
+        object_type=ObjectType.COMPANY.value,
+        source_type=SourceType.API.value,
+        base_url="https://www.gleif.org/lei-data/gleif-lei-look-up-api/access-the-api",
+        authority_level=AuthorityLevel.HIGH.value,
+        priority_weight=8.4,
+        strategy_json={
+            "keywords": ["LEI", "法人主体", "公司识别"],
+            "requires_key": False,
+        },
+    )
+    upsert_source_config(
+        source_code="gemini_google_search_grounding",
+        source_name="Gemini Google Search Grounding",
+        object_type=ObjectType.COMPANY.value,
+        source_type=SourceType.WEB.value,
+        base_url=settings.gemini_base_url,
+        authority_level=AuthorityLevel.MEDIUM.value,
+        priority_weight=7.8,
+        strategy_json={
+            "keywords": ["联网检索", "新闻", "公开网页", "舆情"],
+            "requires_model": True,
+        },
+    )
 
     db.commit()
 

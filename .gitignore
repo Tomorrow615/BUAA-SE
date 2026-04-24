@@ -7,3 +7,6 @@
 # Common local system files
 .DS_Store
 Thumbs.db
+
+# Local secrets
+src/.env.local

@@ -74,7 +74,6 @@ export function WorkspacePage() {
   const activeBlueprint =
     OBJECT_BLUEPRINTS.find((item) => item.value === selectedObjectType) ??
     OBJECT_BLUEPRINTS[0];
-  const isReadyObject = selectedObjectType === "STOCK";
 
   useEffect(() => {
     const token = accessToken;
@@ -139,10 +138,6 @@ export function WorkspacePage() {
 
     if (!accessToken) {
       setSubmitError("当前会话不可用，请重新登录。");
-      return;
-    }
-
-    if (!isReadyObject) {
       return;
     }
 
@@ -344,7 +339,7 @@ export function WorkspacePage() {
               <button
                 type="submit"
                 className="button-primary"
-                disabled={!accessToken || !objectName.trim() || isSubmitting || !isReadyObject}
+                disabled={!accessToken || !objectName.trim() || isSubmitting}
               >
                 {isSubmitting ? "创建中..." : "开始研究"}
               </button>
