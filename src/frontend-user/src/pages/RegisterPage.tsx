@@ -4,6 +4,12 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { register } from "../lib/auth";
 
+const registrationCards = [
+  { title: "Workspace", caption: "创建研究任务" },
+  { title: "Reports", caption: "沉淀分析结果" },
+  { title: "Follow-up", caption: "继续追问与协作" },
+];
+
 export function RegisterPage() {
   const navigate = useNavigate();
   const { authenticate, status } = useAuth();
@@ -67,9 +73,7 @@ export function RegisterPage() {
     return (
       <div className="screen-state">
         <div className="screen-state-card">
-          <p className="eyebrow">用户注册</p>
-          <h1>正在检查当前会话</h1>
-          <p>如果浏览器里已经有有效 token，会直接进入用户端工作台。</p>
+          <h1>正在进入平台</h1>
         </div>
       </div>
     );
@@ -80,90 +84,100 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="public-page">
-      <section className="auth-card">
-        {/* <p className="eyebrow">用户注册</p>
-        <h1>用户端已经接上真实注册接口</h1>
-        <p>
-          当前页面会直接调用 <code>/auth/register</code>。注册成功后会立即保存
-          token，并进入用户端工作台。
-        </p> */}
-        <h1>用户注册</h1>
+    <div className="public-page auth-page-shell auth-page-hero">
+      <div className="auth-hero-layout">
+        <section className="auth-stage auth-stage-user">
+          <p className="eyebrow">DeepSearch Platform</p>
+          <h1>创建研究账号</h1>
+          <p className="auth-stage-copy">进入统一研究工作台，开始新的分析任务。</p>
 
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>用户名</span>
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="如：analyst01"
-              autoComplete="username"
-            />
-          </label>
-
-          <label className="field">
-            <span>展示名</span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="如：市场分析师（可选）"
-            />
-          </label>
-
-          <label className="field">
-            <span>邮箱</span>
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="如：user@example.com"
-              autoComplete="email"
-            />
-          </label>
-
-          <label className="field">
-            <span>密码</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="至少 8 位"
-              autoComplete="new-password"
-            />
-          </label>
-
-          <label className="field">
-            <span>确认密码</span>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="请再次输入密码"
-              autoComplete="new-password"
-            />
-          </label>
-
-          <p className="field-hint">
-            注册接口会自动分配普通用户角色，并返回可直接使用的访问 token。
-          </p>
-
-          {errorMessage ? (
-            <p className="form-message form-message-error">{errorMessage}</p>
-          ) : null}
-
-          <div className="button-row">
-            <button
-              type="submit"
-              className="button-primary"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "正在注册..." : "注册并进入用户端"}
-            </button>
-            <Link className="button-secondary" to="/login">
-              返回登录页
-            </Link>
+          <div className="auth-stage-card-row">
+            {registrationCards.map((item) => (
+              <article key={item.title} className="auth-stage-card">
+                <strong>{item.title}</strong>
+                <span>{item.caption}</span>
+              </article>
+            ))}
           </div>
-        </form>
-      </section>
+        </section>
+
+        <section className="auth-card auth-card-hero">
+          <div className="auth-card-head">
+            <p className="eyebrow">Create Account</p>
+            <h2>注册</h2>
+          </div>
+
+          <form className="form-grid" onSubmit={handleSubmit}>
+            <label className="field">
+              <span>用户名</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="用户名"
+                autoComplete="username"
+              />
+            </label>
+
+            <label className="field">
+              <span>显示名称</span>
+              <input
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="显示名称"
+              />
+            </label>
+
+            <label className="field">
+              <span>邮箱</span>
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="邮箱"
+                autoComplete="email"
+              />
+            </label>
+
+            <label className="field">
+              <span>密码</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="密码"
+                autoComplete="new-password"
+              />
+            </label>
+
+            <label className="field">
+              <span>确认密码</span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="确认密码"
+                autoComplete="new-password"
+              />
+            </label>
+
+            {errorMessage ? (
+              <p className="form-message form-message-error">{errorMessage}</p>
+            ) : null}
+
+            <div className="button-row auth-button-row">
+              <button
+                type="submit"
+                className="button-primary"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "注册中..." : "注册"}
+              </button>
+              <Link className="button-ghost" to="/login">
+                登录
+              </Link>
+            </div>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

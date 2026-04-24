@@ -111,7 +111,7 @@ export function AuditLogsPage() {
     <div className="page-section">
       <header className="page-title">
         <p className="eyebrow">审计日志</p>
-        <h1>日志检索页已经接入真实审计日志查询</h1>
+        <h1>审计日志与追踪中心</h1>
         {/* <p>
           当前页面调用 <code>/admin/audit-logs</code>，支持关键字与动作类型过滤，
           用于后台追踪任务创建和后续治理动作。

@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AdminRouteGuard } from "./components/AdminRouteGuard";
 import { AdminShell } from "./components/AdminShell";
-import { AdminHomePage } from "./pages/AdminHomePage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ModelsPage } from "./pages/ModelsPage";
@@ -15,7 +14,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AdminHomePage />} />
+        <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<AdminRouteGuard />}>

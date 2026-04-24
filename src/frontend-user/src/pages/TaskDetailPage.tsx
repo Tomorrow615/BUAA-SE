@@ -63,42 +63,6 @@ function renderTextList(
   );
 }
 
-function resolveReportSourcePresentation(
-  task: ResearchTaskDetail,
-  materials: ResearchMaterial[],
-): { badge: string; description: string } {
-  const materialCollectionMode = String(
-    task.task_params?.material_collection_mode || "",
-  ).toUpperCase();
-
-  if (materialCollectionMode === "GEMINI_GOOGLE_SEARCH") {
-    return {
-      badge: "Gemini 联网补充",
-      description:
-        "当前报告是在内置数据源不可用时，改由 Gemini 联网检索公开来源后整理生成的。",
-    };
-  }
-
-  if (materials.some((item) => item.source_type === "API")) {
-    return {
-      badge: "内置数据源",
-      description: "当前报告主要基于已接入的数据接口与模型分析结果整理生成。",
-    };
-  }
-
-  if (materials.some((item) => item.source_type === "WEB")) {
-    return {
-      badge: "网页资料整理",
-      description: "当前报告主要基于网页资料与模型分析结果整理生成。",
-    };
-  }
-
-  return {
-    badge: "研究结果整理",
-    description: "当前报告基于本次任务沉淀的研究材料与模型分析结果生成。",
-  };
-}
-
 export function TaskDetailPage() {
   const { taskId } = useParams();
   const { session } = useAuth();
@@ -258,19 +222,13 @@ export function TaskDetailPage() {
     null;
   const latestReport: ResearchReport | null =
     liveStatus?.latest_report ?? taskDetail?.latest_report ?? null;
-  const reportSourcePresentation = activeTask
-    ? resolveReportSourcePresentation(activeTask, materials)
-    : null;
 
   return (
     <div className="page-section task-detail-page">
       <header className="page-title detail-hero">
         <div>
-          <p className="eyebrow">研究交付</p>
+          <p className="eyebrow">Report</p>
           <h1>研究任务详情</h1>
-          <p>
-            当前页面围绕研究总览、成果资产、材料引用与过程日志组织。导出、收藏、追问等入口已按最终形态预留。
-          </p>
         </div>
 
         <div className="detail-hero-actions">
@@ -289,8 +247,11 @@ export function TaskDetailPage() {
             <button type="button" className="button-secondary" disabled>
               导出 PDF
             </button>
+            <button type="button" className="button-secondary" disabled>
+              导出 Word
+            </button>
             <button type="button" className="button-ghost" disabled>
-              收藏任务
+              分享
             </button>
             <Link className="button-ghost" to="/tasks">
               返回任务中心
@@ -432,39 +393,39 @@ export function TaskDetailPage() {
             </article>
 
             <article className="section-card">
-              <h2>交付与协作</h2>
+              <h2>操作</h2>
               <div className="delivery-grid">
                 <div className="delivery-card">
-                  <strong>Markdown 报告</strong>
-                  <span>{latestReport ? "已生成" : "待生成"}</span>
+                  <strong>报告</strong>
+                  <span>{latestReport ? "已生成" : "处理中"}</span>
                 </div>
                 <div className="delivery-card">
-                  <strong>PDF 导出</strong>
-                  <span>即将开放</span>
+                  <strong>PDF</strong>
+                  <span>导出</span>
                 </div>
                 <div className="delivery-card">
-                  <strong>Word 导出</strong>
-                  <span>即将开放</span>
+                  <strong>Word</strong>
+                  <span>导出</span>
                 </div>
                 <div className="delivery-card">
-                  <strong>追问报告</strong>
-                  <span>即将开放</span>
+                  <strong>分享</strong>
+                  <span>链接</span>
                 </div>
               </div>
 
               <div className="button-row">
                 <button type="button" className="button-secondary" disabled>
-                  导出 Word
+                  PDF
                 </button>
                 <button type="button" className="button-secondary" disabled>
-                  追问报告
+                  Word
                 </button>
                 <button type="button" className="button-ghost" disabled>
-                  设置提醒
+                  分享
                 </button>
               </div>
 
-              <h2 className="section-subtitle">研究配置</h2>
+              <h2 className="section-subtitle">配置</h2>
               <dl className="kv-list">
                 {Object.keys(activeTask.task_params).length > 0 ? (
                   Object.entries(activeTask.task_params).map(([key, value]) => (
@@ -487,9 +448,6 @@ export function TaskDetailPage() {
             <div className="detail-report-head">
               <div>
                 <h2>研究报告正文</h2>
-                <p className="detail-section-copy">
-                  这里展示当前任务最新生成的一版完整报告，适合直接通读结论、发现和风险。
-                </p>
               </div>
 
               {latestReport ? (
@@ -506,21 +464,12 @@ export function TaskDetailPage() {
                   <div className="report-stage-card-head">
                     <div>
                       <h3>{latestReport.title}</h3>
-                      <p className="detail-section-copy">
-                        {reportSourcePresentation?.description ||
-                          "当前报告已经生成，可直接阅读正文。"}
-                      </p>
                     </div>
 
                     <div className="report-stage-badges">
                       <span className="soft-badge soft-badge-cool">
                         {formatReportStatus(latestReport.status)}
                       </span>
-                      {reportSourcePresentation ? (
-                        <span className="soft-badge soft-badge-warm">
-                          {reportSourcePresentation.badge}
-                        </span>
-                      ) : null}
                     </div>
                   </div>
 
@@ -547,9 +496,6 @@ export function TaskDetailPage() {
             <div className="toolbar-inline">
               <div>
                 <h2>分析结果概览</h2>
-                <p className="detail-section-copy">
-                  这里展示模型整理出的摘要、关键发现、风险和机会，适合快速扫读。
-                </p>
               </div>
               {latestAnalysis?.model_config_detail?.display_name ? (
                 <span className="field-hint">

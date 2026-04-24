@@ -93,7 +93,7 @@ export function OverviewPage() {
       <header className="page-title">
         {/* <p className="eyebrow">概览面板</p> */}
         {/* <h1>后台概览已经接入真实汇总指标和最近活动</h1> */}
-        <h1>查看各项汇总指标和最近活动</h1>
+        <h1>平台概览与运行态势</h1>
         {/* <p>
           当前页面直接调用 <code>/admin/overview</code>，展示平台指标、最近任务和最近审计日志，
           用于管理员快速判断当前平台运行情况。
@@ -118,7 +118,6 @@ export function OverviewPage() {
       ) : null}
 
       <div className="toolbar-inline">
-        <p className="field-hint">概览页适合先看平台健康度，再进入具体治理模块。</p>
         <div className="button-row button-row-tight">
           <button
             type="button"

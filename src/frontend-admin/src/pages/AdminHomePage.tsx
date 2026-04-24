@@ -2,49 +2,41 @@ import { Link } from "react-router-dom";
 
 import { useAdminAuth } from "../context/AdminAuthContext";
 
+const modules = ["概览", "模型", "用户", "任务", "日志"];
+
 export function AdminHomePage() {
   const { status } = useAdminAuth();
 
   return (
-    <div className="public-page">
-      <section className="hero-card">
-        <h1>商业对象智能深度调研分析平台——管理端</h1>
-        {/* <p>
-          当前管理端已经完成真实管理员登录校验，以及概览、模型、用户、任务、日志等后台查询页面。
-        </p> */}
+    <div className="public-page admin-home-shell">
+      <section className="hero-card admin-hero-card admin-hero-card-minimal">
+        <div className="admin-hero-grid admin-hero-grid-minimal">
+          <div className="admin-hero-copy">
+            <p className="eyebrow">DeepSearch Admin</p>
+            <h1>管理控制台</h1>
+            <p>统一管理模型、用户、任务与日志。</p>
 
-        <div className="button-row">
-          <Link className="button-primary" to="/login">
-            进入管理员登录页
-          </Link>
-          {status === "authenticated" ? (
-            <Link className="button-secondary" to="/overview">
-              进入后台概览
-            </Link>
-          ) : null}
+            <div className="button-row">
+              <Link className="button-primary" to="/login">
+                登录
+              </Link>
+              {status === "authenticated" ? (
+                <Link className="button-secondary" to="/overview">
+                  进入控制台
+                </Link>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="admin-home-module-grid">
+            {modules.map((item) => (
+              <article key={item} className="section-card admin-home-module-card">
+                <h2>{item}</h2>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
-
-      {/* <section className="section-grid">
-        <article className="section-card">
-          <h2>这一步已经完成什么</h2>
-          <ul className="placeholder-list">
-            <li>完成真实管理员登录、权限校验与会话恢复</li>
-            <li>完成概览、模型、用户、任务和日志查询骨架</li>
-            <li>完成后台加载态、空状态、错误反馈和快捷入口收口</li>
-            <li>完成第 7 步统一构建验收</li>
-          </ul>
-        </article>
-
-        <article className="section-card">
-          <h2>下一步接什么</h2>
-          <ul className="placeholder-list">
-            <li>第 8 步：继续补更完整的治理流程与操作位</li>
-            <li>继续补后台更细的交互体验和展示增强</li>
-            <li>再往后衔接更完整的 AI、报告和数据源能力</li>
-          </ul>
-        </article>
-      </section> */}
     </div>
   );
 }

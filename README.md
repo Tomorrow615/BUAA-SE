@@ -57,13 +57,20 @@ cd src
 一个面向 **公司、股票、商品** 三类商业对象的智能深度调研分析平台。  
 项目采用 B/S 架构，围绕“发起调研 -> 任务执行 -> 过程跟踪 -> 后台治理”构建统一链路，支持用户端调研工作流、管理端治理工作流以及后台 Worker 执行链路。
 
+## 当前落地状态
+
+截至 2026-04-24，项目已经接入 Gemini API，并启用 Gemini Google Search grounding 配置；股票 DeepResearch 已形成“任务创建 -> 行情材料采集 -> Gemini 分析 -> Markdown 报告 -> 前端展示”的可运行闭环。
+
+需要特别说明的是：公司和商品目前主要是产品入口与界面预留，后端 `POST /research/tasks` 和 Worker 仍只支持 `STOCK`。下一阶段的核心不是继续堆页面，而是把信息源层做扎实：先接入权威 API/公开数据源，统一沉淀为可引用材料，再由 Gemini 做联网补充、交叉核验和报告生成。
+
 ## 项目亮点
 
-- 支持面向公司、股票、商品三类对象发起统一调研任务
+- 平台结构面向公司、股票、商品三类对象设计，当前后端闭环优先落地股票对象
 - 提供用户端研究工作台、任务中心、任务详情、个人中心
 - 提供管理端概览面板、模型管理、用户管理、任务治理、审计日志
 - 支持 JWT 认证与基础 RBAC 权限控制
 - 支持调研任务入队、Worker 领取、阶段日志记录与状态流转
+- 支持 Gemini 模型调用与 Google Search grounding 兜底检索
 - 使用 PostgreSQL 持久化任务、配置、日志、结果等核心数据
 - 使用 Alembic 管理数据库迁移，支持初始化脚本和种子数据脚本
 - 提供 Docker Compose 基础依赖编排，降低本地启动成本
@@ -197,6 +204,8 @@ Copy-Item .env.example .env
 | `DEFAULT_ADMIN_EMAIL` | 默认管理员邮箱 | 自定义即可 |
 | `DEFAULT_ADMIN_PASSWORD` | 默认管理员密码 | 建议改成你容易记住的密码 |
 | `CORS_ALLOWED_ORIGINS` | 前端跨域白名单 | 保持模板默认值即可 |
+| `GEMINI_API_KEY` | Gemini 模型调用密钥 | 填入你自己的 Gemini API Key |
+| `GEMINI_GOOGLE_SEARCH_ENABLED` | 是否允许 Gemini 联网检索兜底 | 本地开发建议保持 `true` |
 
 如果只是本地首次启动，直接沿用模板中的数据库端口和主机配置即可。
 

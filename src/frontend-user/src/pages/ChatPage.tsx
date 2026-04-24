@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import { useAuth } from "../context/AuthContext";
@@ -27,19 +27,37 @@ const CHAT_SCOPES: Array<{
   {
     value: "STOCK",
     label: "股票",
-    description: "可走数据优先问答，当前链路最完整。",
+    description: "市场与走势",
   },
   {
     value: "COMPANY",
     label: "公司",
-    description: "界面完整预留，当前以纯聊天或自动回退为主。",
+    description: "企业与行业",
   },
   {
     value: "COMMODITY",
     label: "商品",
-    description: "界面完整预留，后续接入商品行情和供需数据。",
+    description: "价格与供需",
   },
 ];
+
+const PROMPT_SUGGESTIONS: Record<ChatObjectType, string[]> = {
+  STOCK: [
+    "梳理近一个月走势与风险。",
+    "总结当前最关键的驱动因素。",
+    "下一步还应该看哪些维度？",
+  ],
+  COMPANY: [
+    "给我一份公司研究框架。",
+    "经营与行业层面先看什么？",
+    "帮我拟一份研究提纲。",
+  ],
+  COMMODITY: [
+    "给我一份商品研究框架。",
+    "应该优先跟踪哪些指标？",
+    "帮我拆解这个研究问题。",
+  ],
+};
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -65,11 +83,11 @@ function normalizeModeLabel(code: ChatAnswerMode): string {
     case "CHAT":
       return "纯聊天";
     case "AUTO":
-      return "自动模式";
+      return "自动";
     case "SOURCE_FIRST":
       return "数据优先";
     case "WEB_FALLBACK":
-      return "联网兜底";
+      return "联网";
     default:
       return code;
   }
@@ -217,28 +235,15 @@ export function ChatPage() {
   }
 
   const selectedModeOption = findModeByCode(modeOptions, selectedMode);
-  const selectedScopeInfo =
-    CHAT_SCOPES.find((item) => item.value === selectedScope) ?? CHAT_SCOPES[0];
-  const chatCapabilities = useMemo(
-    () => [
-      "纯聊天与自由问答",
-      "股票数据优先回答",
-      "引用材料展示",
-      "后续追问入口预留",
-    ],
-    [],
-  );
+  const promptSuggestions = PROMPT_SUGGESTIONS[selectedScope];
 
   return (
-    <div className="page-section chat-page-shell">
-      <section className="chat-surface chat-surface-rich">
-        <header className="chat-page-header chat-page-header-rich">
+    <div className="page-section chat-page-shell chat-page-shell-minimal">
+      <section className="chat-surface chat-surface-minimal">
+        <header className="chat-page-header chat-page-header-minimal">
           <div>
-            <p className="eyebrow">AI 协作助理</p>
-            <h1>研究协作助理</h1>
-            <p className="chat-page-summary">
-              支持自由对话、股票数据优先回答与后续可扩展的多对象问答。当前股票链路最完整，公司和商品问答先按最终界面预留。
-            </p>
+            <p className="eyebrow">Assistant</p>
+            <h1>AI 助理</h1>
           </div>
 
           <div className="chat-page-tools">
@@ -251,7 +256,7 @@ export function ChatPage() {
               >
                 {modelOptions.length === 0 ? (
                   <option value="">
-                    {isLoadingOptions ? "正在加载模型..." : "暂无可用模型"}
+                    {isLoadingOptions ? "加载中..." : "暂无模型"}
                   </option>
                 ) : (
                   modelOptions.map((item) => (
@@ -264,7 +269,7 @@ export function ChatPage() {
             </label>
 
             <label className="chat-model-field">
-              <span>回答方式</span>
+              <span>模式</span>
               <select
                 value={selectedMode}
                 onChange={(event) =>
@@ -273,7 +278,7 @@ export function ChatPage() {
                 disabled={isSubmitting || isLoadingOptions}
               >
                 {modeOptions.length === 0 ? (
-                  <option value="AUTO">自动模式</option>
+                  <option value="AUTO">自动</option>
                 ) : (
                   modeOptions.map((item) => (
                     <option
@@ -282,94 +287,53 @@ export function ChatPage() {
                       disabled={!item.is_available}
                     >
                       {item.label}
-                      {!item.is_available ? "（预留）" : ""}
                     </option>
                   ))
                 )}
               </select>
             </label>
-
-            <button
-              type="button"
-              className="button-ghost"
-              onClick={() => {
-                setMessages([]);
-                setSubmitError("");
-              }}
-              disabled={messages.length === 0 && !submitError}
-            >
-              清空对话
-            </button>
           </div>
         </header>
 
-        <section className="chat-scope-grid">
+        <section className="chat-scope-grid chat-scope-grid-minimal">
           {CHAT_SCOPES.map((item) => (
             <button
               key={item.value}
               type="button"
               className={
                 item.value === selectedScope
-                  ? "object-track-card object-track-card-active"
-                  : "object-track-card"
+                  ? "object-track-card object-track-card-active object-track-card-minimal"
+                  : "object-track-card object-track-card-minimal"
               }
               onClick={() => setSelectedScope(item.value)}
             >
-              <div className="object-track-head">
-                <span>{item.value === "STOCK" ? "优先支持" : "预留对象"}</span>
-                <strong>{item.label}</strong>
-              </div>
+              <strong>{item.label}</strong>
               <p>{item.description}</p>
             </button>
           ))}
         </section>
 
-        <section className="section-grid section-grid-wide chat-info-grid">
-          <article className="section-card">
-            <h2>当前会话设定</h2>
-            <dl className="kv-list">
-              <div>
-                <dt>对象范围</dt>
-                <dd>{selectedScopeInfo.label}</dd>
-              </div>
-              <div>
-                <dt>回答方式</dt>
-                <dd>{selectedModeOption?.label || normalizeModeLabel(selectedMode)}</dd>
-              </div>
-              <div>
-                <dt>当前模型</dt>
-                <dd>
-                  {modelOptions.find((item) => item.value === selectedModel)?.display_name ||
-                    "等待选择"}
-                </dd>
-              </div>
-            </dl>
-            {selectedModeOption?.availability_note ? (
-              <p className="field-hint">{selectedModeOption.availability_note}</p>
-            ) : null}
-          </article>
-
-          <article className="section-card">
-            <h2>能力预览</h2>
-            <ul className="placeholder-list">
-              {chatCapabilities.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </article>
+        <section className="chat-prompt-grid chat-prompt-grid-minimal">
+          {promptSuggestions.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="chat-prompt-card chat-prompt-card-minimal"
+              onClick={() => setDraft(item)}
+            >
+              <p>{item}</p>
+            </button>
+          ))}
         </section>
 
         {submitError ? (
           <p className="form-message form-message-error">{submitError}</p>
         ) : null}
 
-        <div className="chat-message-list">
+        <div className="chat-message-list chat-message-list-minimal">
           {messages.length === 0 ? (
-            <div className="chat-empty-state">
-              <h2>开始对话</h2>
-              <p>
-                可以直接闲聊，也可以切到股票范围后使用数据优先模式提问。公司与商品入口已经在界面中预留，后续接通数据链路后会直接承接。
-              </p>
+            <div className="chat-empty-state chat-empty-state-minimal">
+              <h2>{selectedModeOption?.label || normalizeModeLabel(selectedMode)}</h2>
             </div>
           ) : (
             messages.map((message) => (
@@ -378,15 +342,12 @@ export function ChatPage() {
                 className={`chat-message chat-message-${message.role}`}
               >
                 <div className="chat-message-meta">
-                  <strong>{message.role === "user" ? "你" : "AI 助理"}</strong>
+                  <strong>{message.role === "user" ? "你" : "AI"}</strong>
                 </div>
 
                 {message.role === "assistant" ? (
                   <>
                     <MarkdownRenderer content={message.content} />
-                    {message.note ? (
-                      <p className="chat-assistant-note">{message.note}</p>
-                    ) : null}
                     {message.citations && message.citations.length > 0 ? (
                       <div className="chat-citation-list">
                         {message.citations.map((item) => (
@@ -414,33 +375,42 @@ export function ChatPage() {
           {isSubmitting ? (
             <article className="chat-message chat-message-assistant chat-message-pending">
               <div className="chat-message-meta">
-                <strong>AI 助理</strong>
+                <strong>AI</strong>
               </div>
-              <p className="chat-plain-text">正在生成回复，请稍候...</p>
+              <p className="chat-plain-text">正在生成回复...</p>
             </article>
           ) : null}
         </div>
 
-        <form className="chat-composer" onSubmit={handleSubmit}>
+        <form className="chat-composer chat-composer-minimal" onSubmit={handleSubmit}>
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入你的问题。按 Enter 发送，Shift + Enter 换行。"
+            placeholder="输入问题"
             rows={5}
             disabled={isSubmitting}
           />
 
           <div className="chat-composer-footer">
-            <span className="field-hint">
-              当前模式：{selectedModeOption?.label || normalizeModeLabel(selectedMode)}
-            </span>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => {
+                setMessages([]);
+                setSubmitError("");
+              }}
+              disabled={messages.length === 0 && !submitError}
+            >
+              清空
+            </button>
+
             <button
               type="submit"
               className="button-primary"
               disabled={!accessToken || !draft.trim() || isSubmitting}
             >
-              {isSubmitting ? "正在回复..." : "发送消息"}
+              {isSubmitting ? "发送中..." : "发送"}
             </button>
           </div>
         </form>

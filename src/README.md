@@ -8,6 +8,17 @@ Current code layout:
 - `backend-worker/`: background task worker
 - `shared/`: shared constants, schemas, and utilities
 
+## Current implementation status
+
+As of 2026-04-24, the runnable DeepResearch pipeline is still stock-first:
+
+- Stock research can create tasks, collect real market materials, call Gemini, generate reports, and show results in the user UI.
+- Company and commodity entries exist in the product surface, but the backend task API and worker still reject non-stock research tasks.
+- Gemini API key and Google Search grounding are supported through `GEMINI_API_KEY` and `GEMINI_GOOGLE_SEARCH_ENABLED`.
+- The currently implemented stock source is the Eastmoney public quote interface. It is useful for the demo pipeline, but it should be treated as a medium-authority market data source, not the final authoritative source layer.
+
+Next development should focus on the information-source layer: add source adapters, normalize them into `materials`, rank/deduplicate materials, then let Gemini analyze only after traceable sources have been collected.
+
 ## Recommended startup
 
 If you already completed the one-time dependency setup, the fastest way to run the project is from `src/`:

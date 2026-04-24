@@ -115,7 +115,7 @@ export function UsersPage() {
     <div className="page-section">
       <header className="page-title">
         <p className="eyebrow">用户管理</p>
-        <h1>用户治理页已经接入真实用户列表和状态查询</h1>
+        <h1>用户治理中心</h1>
         {/* <p>
           当前页面调用 <code>/admin/users</code>，可按关键字和账号状态过滤，
           用于管理员查看用户规模、角色分布和任务活跃度。

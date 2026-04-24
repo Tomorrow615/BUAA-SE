@@ -169,22 +169,19 @@ export function TasksPage() {
     <div className="page-section">
       <header className="page-title tasks-page-header">
         <div>
-          <p className="eyebrow">任务中心</p>
-          <h1>研究任务中心</h1>
-          <p>
-            统一查看任务进度、报告结果、未来导出能力与资产化入口。当前真实任务以股票研究为主，其他对象入口已纳入筛选与结构展示。
-          </p>
+          <p className="eyebrow">Tasks</p>
+          <h1>任务中心</h1>
         </div>
 
         <div className="button-row button-row-tight">
           <Link className="button-primary" to="/workspace">
-            发起新研究
+            新建研究
           </Link>
           <button type="button" className="button-secondary" disabled>
-            批量导出
+            导出
           </button>
           <button type="button" className="button-ghost" disabled>
-            订阅提醒
+            分享
           </button>
         </div>
       </header>
@@ -201,8 +198,7 @@ export function TasksPage() {
       <section className="section-card filter-card">
         <div className="workspace-card-head">
           <div>
-            <h2>筛选与查找</h2>
-            <p>可按对象类型、状态、模型和关键词定位当前任务。</p>
+            <h2>筛选</h2>
           </div>
           <p className="field-hint">最近刷新：{formatDateTime(lastUpdatedAt)}</p>
         </div>
@@ -403,19 +399,19 @@ export function TasksPage() {
             <div className="task-card-footer">
               <div className="task-card-actions">
                 <Link className="button-primary" to={`/tasks/${task.id}`}>
-                  查看详情
+                  打开
                 </Link>
-                <Link className="button-secondary" to="/workspace">
-                  再发起一条
-                </Link>
+                <button type="button" className="button-secondary" disabled>
+                  PDF
+                </button>
                 <button type="button" className="button-ghost" disabled>
-                  收藏任务
+                  分享
                 </button>
               </div>
 
               <div className="task-card-assets">
-                <span>报告资产</span>
-                <strong>Markdown 已展示</strong>
+                <span>{task.selected_model?.display_name || "Default"}</span>
+                <strong>{formatTaskStatus(task.status)}</strong>
               </div>
             </div>
           </article>
