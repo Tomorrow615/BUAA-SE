@@ -315,6 +315,11 @@ def build_business_prompt(
 
     materials_text = "\n\n".join(material_blocks) or "暂无材料。"
     research_goal_text = research_goal.strip() if research_goal and research_goal.strip() else "未额外指定研究目标"
+    focus_instruction = build_business_focus_instruction(
+        object_label=object_label,
+        object_name=object_name,
+        research_goal=research_goal_text,
+    )
 
     return f"""
 请基于以下{object_label}调研材料生成结构化 DeepResearch 报告，只能使用已提供材料，不得补充外部事实。
@@ -338,6 +343,8 @@ def build_business_prompt(
 4. 所有事实判断、数字、趋势判断都必须来源于材料，并在句尾添加 [SRC_xxx]。
 5. 结论必须谨慎，不能写成买入、卖出、保证收益等投资建议。
 6. 如果材料不足，请明确写出“信息不足”，不要编造。
+7. 模型推断也必须说明依据哪些材料，不允许用 [模型推断] 或 [信息不足] 替代来源编号。
+8. {focus_instruction}
 
 材料如下：
 {materials_text}
@@ -368,7 +375,8 @@ def build_stock_web_prompt(
   "key_findings": ["字符串"],
   "risks": ["字符串"],
   "opportunities": ["字符串"],
-  "conclusion": "字符串"
+  "conclusion": "字符串",
+  "report_markdown": "字符串"
 }}
 3. 允许使用联网检索得到的公开资料，但不能虚构具体来源或精确数据。
 4. 对于时间敏感信息，要尽量明确写出“截至目前”“近期”“最近交易日”等表述。
@@ -384,6 +392,11 @@ def build_business_web_prompt(
     lookback_days: int,
 ) -> str:
     research_goal_text = research_goal.strip() if research_goal and research_goal.strip() else "未额外指定研究目标"
+    focus_instruction = build_business_focus_instruction(
+        object_label=object_label,
+        object_name=object_name,
+        research_goal=research_goal_text,
+    )
     return f"""
 请围绕以下{object_label}对象生成结构化调研分析。你可以使用 Google Search grounding 检索公开资料，但不得编造来源。
 
@@ -399,12 +412,66 @@ def build_business_web_prompt(
   "key_findings": ["字符串"],
   "risks": ["字符串"],
   "opportunities": ["字符串"],
-  "conclusion": "字符串"
+  "conclusion": "字符串",
+  "report_markdown": "字符串"
 }}
 3. 优先引用官方、监管、交易所、政府、公司官网和主流财经媒体来源。
 4. 区分事实、数据、媒体报道、市场观点，不要把新闻观点写成确定事实。
 5. 结论保持谨慎，不构成投资建议。
+6. 模型推断也必须说明依据哪些来源，不允许用 [模型推断] 或 [信息不足] 替代可追溯来源。
+7. {focus_instruction}
 """.strip()
+
+
+def build_business_focus_instruction(
+    *,
+    object_label: str,
+    object_name: str,
+    research_goal: str,
+) -> str:
+    normalized_goal = research_goal.casefold()
+    normalized_name = object_name.casefold()
+    asks_price = any(
+        keyword in normalized_goal
+        for keyword in [
+            "价格",
+            "波动",
+            "走势",
+            "涨跌",
+            "行情",
+            "原因",
+            "驱动",
+            "price",
+            "volatility",
+            "trend",
+            "driver",
+        ]
+    )
+    is_gold = any(keyword in normalized_name for keyword in ["黄金", "gold", "xau"])
+
+    if object_label == "商品" and asks_price:
+        gold_clause = (
+            "黄金场景下，央行购金/储备只能作为需求侧影响因素之一，不能替代价格走势分析；"
+            if is_gold
+            else ""
+        )
+        return (
+            "商品价格波动类报告必须把“价格怎么动”放在首位：摘要和正文前半部分必须说明"
+            "观察区间内的最新价格、起止变化、涨跌幅、区间高点/低点和波动幅度；随后再拆解"
+            "供需、库存/储备、利率、美元、政策、地缘事件和市场预期等驱动因素。"
+            f"{gold_clause}"
+            "如果材料中没有价格序列或价格数据，必须在摘要第一句写明“价格序列材料不足”，"
+            "不得用储备、新闻标题或泛泛观点冒充价格波动分析。"
+            "report_markdown 建议包含“摘要”“价格走势与波动”“驱动因素拆解”“数据表”“风险与不确定性”“结论”“引用材料”。"
+        )
+
+    if object_label == "商品":
+        return (
+            "商品报告应优先覆盖价格、供需、库存/储备、宏观变量、政策和事件冲击；"
+            "不要只罗列单一来源材料。"
+        )
+
+    return "报告必须围绕用户研究目标组织，不要被无关材料带偏主题。"
 
 
 def parse_json_payload(raw_text: str) -> dict[str, Any]:
@@ -439,13 +506,18 @@ def parse_or_wrap_payload(raw_text: str) -> dict[str, Any]:
         )
         if summary in {"{", "[", "```json", "```"}:
             summary = "模型返回了非标准 JSON 文本，系统已将原文作为报告内容保存。"
+        report_markdown = extract_json_string_field(cleaned, "report_markdown") or cleaned
+        conclusion = (
+            extract_json_string_field(cleaned, "conclusion")
+            or "模型返回了非 JSON 文本，系统已将原文作为报告内容保存。"
+        )
         return {
             "summary": summary[:500],
             "key_findings": [],
             "risks": [],
             "opportunities": [],
-            "conclusion": "模型返回了非 JSON 文本，系统已将原文作为报告内容保存。",
-            "report_markdown": cleaned,
+            "conclusion": conclusion,
+            "report_markdown": report_markdown,
         }
 
 

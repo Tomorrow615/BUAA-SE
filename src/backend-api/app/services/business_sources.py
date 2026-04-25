@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import re
 import time
@@ -62,8 +62,8 @@ COMMODITY_ALPHA_FUNCTIONS = {
 }
 
 COMMODITY_FRED_SERIES = {
-    "黄金": ("GOLDAMGBD228NLBM", "伦敦金银市场协会黄金定盘价"),
-    "gold": ("GOLDAMGBD228NLBM", "LBMA gold fixing price"),
+    "黄金": ("NASDAQQGLDI", "Credit Suisse NASDAQ Gold FLOWS103 价格指数"),
+    "gold": ("NASDAQQGLDI", "Credit Suisse NASDAQ Gold FLOWS103 price index"),
     "原油": ("DCOILWTICO", "WTI 原油现货价格"),
     "oil": ("DCOILWTICO", "WTI crude oil spot price"),
     "wti": ("DCOILWTICO", "WTI crude oil spot price"),
@@ -72,6 +72,33 @@ COMMODITY_FRED_SERIES = {
     "铜": ("PCOPPUSDM", "全球铜价月度序列"),
     "copper": ("PCOPPUSDM", "Global copper price series"),
 }
+
+FRED_DAILY_COMMODITY_SERIES = {
+    "NASDAQQGLDI",
+    "DCOILWTICO",
+    "DHHNGSP",
+}
+
+FRED_GOLD_DRIVER_SERIES = {
+    "DGS10": "美国10年期国债收益率",
+    "DFII10": "美国10年期TIPS实际收益率",
+    "DTWEXBGS": "美元广义名义指数",
+}
+
+GOLD_COMMODITY_KEYWORDS = ("黄金", "gold", "xau")
+PRICE_RESEARCH_KEYWORDS = (
+    "价格",
+    "波动",
+    "走势",
+    "涨跌",
+    "行情",
+    "驱动",
+    "原因",
+    "price",
+    "volatility",
+    "trend",
+    "driver",
+)
 
 
 @dataclass(frozen=True)
@@ -172,9 +199,24 @@ def collect_research_materials(
             safe_collect(
                 "FRED 商品/宏观序列",
                 warnings,
-                lambda: collect_fred_commodity_materials(settings, display_name),
+                lambda: collect_fred_commodity_materials(
+                    settings,
+                    display_name,
+                    lookback_days=lookback_days,
+                ),
             )
         )
+        if is_gold_commodity(display_name):
+            materials.extend(
+                safe_collect(
+                    "FRED 黄金宏观驱动",
+                    warnings,
+                    lambda: collect_fred_gold_driver_materials(
+                        settings,
+                        lookback_days=lookback_days,
+                    ),
+                )
+            )
         materials.extend(
             safe_collect(
                 "EIA 能源价格",
@@ -194,6 +236,7 @@ def collect_research_materials(
                     object_name=display_name,
                     research_goal=research_goal,
                     source_strategy=source_strategy,
+                    lookback_days=lookback_days,
                 ),
             )
         )
@@ -390,7 +433,12 @@ def collect_alpha_commodity_materials(settings: Any, commodity_name: str) -> lis
     ]
 
 
-def collect_fred_commodity_materials(settings: Any, commodity_name: str) -> list[dict[str, Any]]:
+def collect_fred_commodity_materials(
+    settings: Any,
+    commodity_name: str,
+    *,
+    lookback_days: int,
+) -> list[dict[str, Any]]:
     api_key = clean_optional(settings.fred_api_key)
     if not api_key:
         return []
@@ -398,29 +446,39 @@ def collect_fred_commodity_materials(settings: Any, commodity_name: str) -> list
     if not series:
         return []
     series_id, series_name = series
+    limit = fred_observation_limit(series_id, lookback_days)
     payload = request_json(
         FRED_URL,
         params={
             "series_id": series_id,
             "api_key": api_key,
             "file_type": "json",
+            "observation_start": fred_observation_start(lookback_days),
             "sort_order": "desc",
-            "limit": "12",
+            "limit": str(limit),
         },
     )
     observations = payload.get("observations") if isinstance(payload, dict) else None
     if not isinstance(observations, list) or not observations:
         return []
-    latest = observations[0]
+    rows = clean_numeric_observations(observations)
+    if not rows:
+        return []
+    latest = rows[0]
+    stats = summarize_numeric_observations(rows)
+    stats_summary = format_series_stats_summary(series_name, stats)
     return [
         build_material_payload(
-            title=f"{commodity_name} FRED 时间序列",
-            summary=(
-                f"{series_name} 最近一期 {latest.get('date') or '未知日期'} "
-                f"数值为 {latest.get('value') or '未知'}。"
-            ),
+            title=f"{commodity_name} FRED 价格波动序列",
+            summary=stats_summary,
             content_text=json.dumps(
-                {"series_id": series_id, "series_name": series_name, "observations": observations},
+                {
+                    "series_id": series_id,
+                    "series_name": series_name,
+                    "lookback_days": lookback_days,
+                    "stats": stats,
+                    "observations_desc": rows[: min(len(rows), 90)],
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
@@ -429,8 +487,69 @@ def collect_fred_commodity_materials(settings: Any, commodity_name: str) -> list
             source_type=SourceType.API.value,
             authority_level=AuthorityLevel.HIGH.value,
             published_at=parse_date(str(latest.get("date") or "")),
-            relevance_score=8.8,
+            relevance_score=9.6 if is_gold_commodity(commodity_name) else 8.8,
             dedup_key=f"fred:{series_id}:{latest.get('date')}",
+        )
+    ]
+
+
+def collect_fred_gold_driver_materials(settings: Any, *, lookback_days: int) -> list[dict[str, Any]]:
+    api_key = clean_optional(settings.fred_api_key)
+    if not api_key:
+        return []
+
+    series_payload: dict[str, Any] = {}
+    summary_lines: list[str] = []
+    latest_dates: list[str] = []
+
+    for series_id, series_name in FRED_GOLD_DRIVER_SERIES.items():
+        payload = request_json(
+            FRED_URL,
+            params={
+                "series_id": series_id,
+                "api_key": api_key,
+                "file_type": "json",
+                "observation_start": fred_observation_start(lookback_days),
+                "sort_order": "desc",
+                "limit": str(fred_observation_limit(series_id, lookback_days)),
+            },
+        )
+        observations = payload.get("observations") if isinstance(payload, dict) else None
+        if not isinstance(observations, list) or not observations:
+            continue
+
+        rows = clean_numeric_observations(observations)
+        if not rows:
+            continue
+
+        stats = summarize_numeric_observations(rows)
+        series_payload[series_id] = {
+            "series_name": series_name,
+            "stats": stats,
+            "observations_desc": rows[: min(len(rows), 90)],
+        }
+        summary_lines.append(format_series_stats_summary(series_name, stats))
+        latest_dates.append(str(stats.get("latest_date") or ""))
+
+    if not series_payload:
+        return []
+
+    latest_date = max((item for item in latest_dates if item), default="")
+    return [
+        build_material_payload(
+            title="黄金价格宏观驱动 FRED 序列",
+            summary=(
+                "；".join(summary_lines[:3])
+                + "。这些序列可用于解释黄金价格与利率、实际利率、美元指数之间的同向或反向压力。"
+            ),
+            content_text=json.dumps(series_payload, ensure_ascii=False, indent=2),
+            source_name="Federal Reserve Economic Data (FRED)",
+            source_url="https://fred.stlouisfed.org/",
+            source_type=SourceType.API.value,
+            authority_level=AuthorityLevel.HIGH.value,
+            published_at=parse_date(latest_date),
+            relevance_score=9.2,
+            dedup_key=f"fred:gold_drivers:{latest_date}",
         )
     ]
 
@@ -634,15 +753,14 @@ def collect_gemini_web_materials(
     object_name: str,
     research_goal: str | None,
     source_strategy: str | None,
+    lookback_days: int,
 ) -> list[dict[str, Any]]:
-    prompt = (
-        "请围绕一个商业调研对象做公开资料检索，并只总结可追溯来源里的内容。\n"
-        f"对象类型：{object_type}\n"
-        f"对象名称：{object_name}\n"
-        f"研究目标：{research_goal or '未指定'}\n"
-        f"信息源策略：{source_strategy or 'DEFAULT'}\n\n"
-        "要求：优先官方、监管、交易所、政府、公司官网、主流财经媒体。"
-        "区分硬事实、媒体报道、市场观点。输出中文要点，避免投资建议。"
+    prompt = build_web_source_prompt(
+        object_type=object_type,
+        object_name=object_name,
+        research_goal=research_goal,
+        source_strategy=source_strategy,
+        lookback_days=lookback_days,
     )
     payload = call_gemini_generate_content_raw(
         settings=settings,
@@ -695,6 +813,48 @@ def collect_gemini_web_materials(
             )
         )
     return materials
+
+
+def build_web_source_prompt(
+    *,
+    object_type: str,
+    object_name: str,
+    research_goal: str | None,
+    source_strategy: str | None,
+    lookback_days: int,
+) -> str:
+    research_goal_text = research_goal or "未指定"
+    base_prompt = (
+        "请围绕一个商业调研对象做公开资料检索，并只总结可追溯来源里的内容。\n"
+        f"对象类型：{object_type}\n"
+        f"对象名称：{object_name}\n"
+        f"观察区间：近 {lookback_days} 天\n"
+        f"研究目标：{research_goal_text}\n"
+        f"信息源策略：{source_strategy or 'DEFAULT'}\n\n"
+        "通用要求：优先官方、监管、交易所、政府、公司官网、主流财经媒体。"
+        "区分硬事实、媒体报道、市场观点。输出中文要点，避免投资建议。"
+    )
+
+    if object_type.upper() == ObjectType.COMMODITY.value:
+        commodity_focus = (
+            "\n\n商品研究额外要求：必须围绕价格走势、供需、库存/储备、政策、宏观变量、"
+            "地缘事件和市场预期组织材料。若用户目标涉及价格、波动或走势，"
+            "请优先检索价格水平、近阶段涨跌幅、区间高低点和驱动因素。"
+        )
+        if is_gold_commodity(object_name):
+            commodity_focus += (
+                "这是黄金价格波动研究，请重点检索 spot gold / XAU/USD / COMEX gold / LBMA gold "
+                "以及黄金价格上涨或下跌原因；必须覆盖美元、名义利率、实际利率、"
+                "美联储预期、央行购金、ETF/投资需求、地缘政治和避险需求。"
+                "不要把央行黄金储备变化当成价格波动本身；它只能作为需求侧因素之一。"
+            )
+        if is_price_research(research_goal_text):
+            commodity_focus += (
+                "最终摘要必须先回答“价格怎么动”，再解释“为什么动”。"
+            )
+        return base_prompt + commodity_focus
+
+    return base_prompt
 
 
 def build_material_payload(
@@ -923,6 +1083,104 @@ def resolve_commodity_key(mapping: dict[str, Any], commodity_name: str) -> Any |
         if key.casefold() in normalized or normalized in key.casefold():
             return value
     return None
+
+
+def is_gold_commodity(commodity_name: str) -> bool:
+    normalized = commodity_name.strip().casefold()
+    return any(keyword.casefold() in normalized for keyword in GOLD_COMMODITY_KEYWORDS)
+
+
+def is_price_research(research_goal: str | None) -> bool:
+    normalized = (research_goal or "").casefold()
+    return any(keyword.casefold() in normalized for keyword in PRICE_RESEARCH_KEYWORDS)
+
+
+def fred_observation_limit(series_id: str, lookback_days: int) -> int:
+    if series_id in FRED_DAILY_COMMODITY_SERIES or series_id in FRED_GOLD_DRIVER_SERIES:
+        return min(max(lookback_days + 45, 90), 420)
+    return 36
+
+
+def fred_observation_start(lookback_days: int) -> str:
+    start_date = datetime.now(timezone.utc).date() - timedelta(days=max(lookback_days, 1) + 7)
+    return start_date.isoformat()
+
+
+def clean_numeric_observations(observations: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in observations:
+        if not isinstance(item, dict):
+            continue
+        value = parse_float(item.get("value"))
+        date_value = str(item.get("date") or "").strip()
+        if value is None or not date_value:
+            continue
+        rows.append({"date": date_value, "value": value})
+    return rows
+
+
+def summarize_numeric_observations(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    latest = rows[0]
+    earliest = rows[-1]
+    values = [float(row["value"]) for row in rows]
+    high_row = max(rows, key=lambda row: float(row["value"]))
+    low_row = min(rows, key=lambda row: float(row["value"]))
+    latest_value = float(latest["value"])
+    earliest_value = float(earliest["value"])
+    absolute_change = latest_value - earliest_value
+    percent_change = (
+        absolute_change / earliest_value * 100 if earliest_value not in (0, 0.0) else None
+    )
+    high_value = float(high_row["value"])
+    low_value = float(low_row["value"])
+    range_percent = (high_value - low_value) / low_value * 100 if low_value not in (0, 0.0) else None
+    average_value = sum(values) / len(values)
+
+    return {
+        "sample_count": len(rows),
+        "earliest_date": earliest["date"],
+        "earliest_value": round(earliest_value, 4),
+        "latest_date": latest["date"],
+        "latest_value": round(latest_value, 4),
+        "absolute_change": round(absolute_change, 4),
+        "percent_change": round(percent_change, 4) if percent_change is not None else None,
+        "high_date": high_row["date"],
+        "high_value": round(high_value, 4),
+        "low_date": low_row["date"],
+        "low_value": round(low_value, 4),
+        "range_percent": round(range_percent, 4) if range_percent is not None else None,
+        "average_value": round(average_value, 4),
+    }
+
+
+def format_series_stats_summary(series_name: str, stats: dict[str, Any]) -> str:
+    percent_change = stats.get("percent_change")
+    range_percent = stats.get("range_percent")
+    percent_text = "未知"
+    if isinstance(percent_change, (int, float)):
+        percent_text = f"{percent_change:+.2f}%"
+    range_text = "未知"
+    if isinstance(range_percent, (int, float)):
+        range_text = f"{range_percent:.2f}%"
+    return (
+        f"{series_name}在 {stats.get('earliest_date')} 至 {stats.get('latest_date')} "
+        f"从 {stats.get('earliest_value')} 变至 {stats.get('latest_value')}，"
+        f"区间涨跌幅 {percent_text}；样本内最高 {stats.get('high_value')} "
+        f"({stats.get('high_date')})，最低 {stats.get('low_value')} "
+        f"({stats.get('low_date')})，高低区间幅度 {range_text}"
+    )
+
+
+def parse_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    if not normalized or normalized == ".":
+        return None
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
 
 
 def parse_date(value: str) -> datetime | None:
