@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     eia_api_key: str | None = None
     sec_user_agent: str = "BUAA-SE business research demo wangmt615@gmail.com"
     tushare_token: str | None = None
+    news_api_key: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=(ENV_FILE, LOCAL_ENV_FILE),

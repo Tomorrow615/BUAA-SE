@@ -11,6 +11,12 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from app.models.enums import AuthorityLevel, ObjectType, SourceType
+from app.services.extended_sources import (
+    collect_eastmoney_news_materials,
+    collect_news_api_materials,
+    collect_world_bank_materials,
+    collect_yahoo_stock_materials,
+)
 from app.services.gemini_api import (
     build_google_search_tool,
     build_text_content,
@@ -160,6 +166,35 @@ def collect_research_materials(
                 lambda: collect_sec_company_materials(settings, display_name),
             )
         )
+        # 新增: Yahoo Finance 美股数据
+        if alpha_symbol:
+            materials.extend(
+                safe_collect(
+                    "Yahoo Finance 美股行情",
+                    warnings,
+                    lambda: collect_yahoo_stock_materials(settings, alpha_symbol, lookback_days=lookback_days),
+                )
+            )
+        # 新增: 东方财富资讯
+        stock_code = extract_chinese_stock_code(symbol or display_name)
+        if stock_code:
+            materials.extend(
+                safe_collect(
+                    "东方财富资讯新闻",
+                    warnings,
+                    lambda: collect_eastmoney_news_materials(settings, stock_code=stock_code, lookback_days=lookback_days),
+                )
+            )
+        # 新增: News API 财经新闻
+        news_api_key = clean_optional(settings.news_api_key)
+        if news_api_key:
+            materials.extend(
+                safe_collect(
+                    "News API 财经新闻",
+                    warnings,
+                    lambda: collect_news_api_materials(settings, display_name, api_key=news_api_key),
+                )
+            )
 
     elif normalized_type == ObjectType.COMPANY.value:
         materials.extend(
@@ -179,6 +214,14 @@ def collect_research_materials(
                     lambda: collect_alpha_stock_materials(settings, alpha_symbol),
                 )
             )
+            # 新增: Yahoo Finance 美股数据
+            materials.extend(
+                safe_collect(
+                    "Yahoo Finance 美股行情",
+                    warnings,
+                    lambda: collect_yahoo_stock_materials(settings, alpha_symbol, lookback_days=lookback_days),
+                )
+            )
         materials.extend(
             safe_collect(
                 "GLEIF 法人主体资料",
@@ -186,6 +229,16 @@ def collect_research_materials(
                 lambda: collect_gleif_company_materials(settings, display_name),
             )
         )
+        # 新增: News API 财经新闻
+        news_api_key = clean_optional(settings.news_api_key)
+        if news_api_key:
+            materials.extend(
+                safe_collect(
+                    "News API 财经新闻",
+                    warnings,
+                    lambda: collect_news_api_materials(settings, display_name, api_key=news_api_key),
+                )
+            )
 
     elif normalized_type == ObjectType.COMMODITY.value:
         materials.extend(
@@ -224,6 +277,36 @@ def collect_research_materials(
                 lambda: collect_eia_energy_materials(settings, display_name),
             )
         )
+        # 新增: Yahoo Finance 商品数据
+        if is_commodity_with_yahoo(display_name):
+            yahoo_commodity = map_to_yahoo_commodity(display_name)
+            if yahoo_commodity:
+                materials.extend(
+                    safe_collect(
+                        "Yahoo Finance 商品行情",
+                        warnings,
+                        lambda: collect_yahoo_stock_materials(settings, yahoo_commodity, lookback_days=lookback_days),
+                    )
+                )
+        # 新增: World Bank 宏观经济数据
+        if is_macro_economic_query(display_name):
+            materials.extend(
+                safe_collect(
+                    "World Bank 宏观经济数据",
+                    warnings,
+                    lambda: collect_world_bank_materials(settings),
+                )
+            )
+        # 新增: News API 财经新闻
+        news_api_key = clean_optional(settings.news_api_key)
+        if news_api_key:
+            materials.extend(
+                safe_collect(
+                    "News API 财经新闻",
+                    warnings,
+                    lambda: collect_news_api_materials(settings, display_name, api_key=news_api_key),
+                )
+            )
 
     if settings.gemini_api_key and settings.gemini_google_search_enabled:
         materials.extend(
@@ -1195,10 +1278,58 @@ def parse_date(value: str) -> datetime | None:
     return None
 
 
+# 公司名称到股票代码的映射
+COMPANY_NAME_TO_SYMBOL = {
+    "苹果公司": "AAPL",
+    "苹果": "AAPL",
+    "apple": "AAPL",
+    "微软": "MSFT",
+    "microsoft": "MSFT",
+    "谷歌": "GOOGL",
+    "google": "GOOGL",
+    "Alphabet": "GOOGL",
+    "亚马逊": "AMZN",
+    "amazon": "AMZN",
+    "特斯拉": "TSLA",
+    "tesla": "TSLA",
+    "英伟达": "NVDA",
+    "nvidia": "NVDA",
+    "台积电": "TSM",
+    "tsmc": "TSM",
+    "腾讯": "TCEHY",
+    "tencent": "TCEHY",
+    "阿里巴巴": "BABA",
+    "alibaba": "BABA",
+    "京东": "JD",
+    "jd.com": "JD",
+    "百度": "BIDU",
+    "baidu": "BIDU",
+    "比亚迪": "BYDDY",
+    "索尼": "SONY",
+    "sony": "SONY",
+    "三星": "SSNLF",
+    "samsung": "SSNLF",
+    "Meta": "META",
+    "facebook": "META",
+    "奈飞": "NFLX",
+    "netflix": "NFLX",
+    "迪士尼": "DIS",
+    "disney": "DIS",
+    "耐克": "NKE",
+    "nike": "NKE",
+}
+
+
 def detect_symbol(value: str) -> str | None:
+    """从输入中检测股票代码"""
     normalized = value.strip()
+    # 检查是否已经是股票代码格式
     if re.fullmatch(r"[A-Za-z]{1,5}(?:\.[A-Za-z]{1,3})?", normalized):
         return normalized.upper()
+    # 检查公司名称映射
+    for name, symbol in COMPANY_NAME_TO_SYMBOL.items():
+        if name.lower() in normalized.lower():
+            return symbol
     return None
 
 
@@ -1236,3 +1367,68 @@ def clean_optional(value: Any) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def extract_chinese_stock_code(value: str | None) -> str | None:
+    """从股票名称或代码中提取A股6位股票代码"""
+    if not value:
+        return None
+    normalized = str(value).strip()
+    match = re.fullmatch(r"\d{6}(?:\.(SH|SZ|BJ))?", normalized)
+    if match:
+        return match.group(0)[:6]
+    match = re.search(r"(\d{6})", normalized)
+    if match:
+        return match.group(1)
+    return None
+
+
+MACRO_ECONOMIC_KEYWORDS = (
+    "经济", "gdp", "宏观", "人口", "通胀", "economic", "inflation",
+    "增长", "gdp增长", "人民币", "美元", "汇率", "外汇",
+)
+
+
+def is_macro_economic_query(object_name: str) -> bool:
+    """判断是否是宏观经济相关查询"""
+    normalized = object_name.lower()
+    return any(kw in normalized for kw in MACRO_ECONOMIC_KEYWORDS)
+
+
+COMMODITY_TO_YAHOO = {
+    "原油": "CL=F",
+    "oil": "CL=F",
+    "wti": "CL=F",
+    "布伦特": "BZ=F",
+    "brent": "BZ=F",
+    "天然气": "NG=F",
+    "natural gas": "NG=F",
+    "黄金": "GC=F",
+    "gold": "GC=F",
+    "xau": "GC=F",
+    "白银": "SI=F",
+    "silver": "SI=F",
+    "铜": "HG=F",
+    "copper": "HG=F",
+    "玉米": "ZC=F",
+    "corn": "ZC=F",
+    "小麦": "ZW=F",
+    "wheat": "ZW=F",
+    "大豆": "ZS=F",
+    "soybean": "ZS=F",
+}
+
+
+def is_commodity_with_yahoo(object_name: str) -> bool:
+    """判断是否为可在 Yahoo Finance 查询的商品"""
+    normalized = object_name.lower()
+    return any(kw in normalized for kw in COMMODITY_TO_YAHOO.keys())
+
+
+def map_to_yahoo_commodity(object_name: str) -> str | None:
+    """将商品名称映射到 Yahoo Finance 交易代码"""
+    normalized = object_name.lower()
+    for kw, yahoo_code in COMMODITY_TO_YAHOO.items():
+        if kw in normalized:
+            return yahoo_code
+    return None
